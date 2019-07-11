@@ -16,14 +16,12 @@ defmodule Absinthe do
   def main(args) do
     opts = CLI.parse(args)
     IO.inspect(opts)
-    get_files(opts)
+    files = get_files(opts)
+    IO.inspect(files)
   end
 
   defp get_files(opts) do
     [path: path, ext: ext] = opts
-    wc = "#{path}*#{ext}"
-    IO.puts(wc)
-    files = Path.wildcard(wc)
-    IO.inspect(files)
+    Path.wildcard("#{path}*#{ext}")
   end
 end
