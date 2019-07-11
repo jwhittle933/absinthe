@@ -1,3 +1,4 @@
 %{
   "cli_spinners": {:hex, :cli_spinners, "0.1.0", "08d89c6f1840a8927daed48c675ecb2f20c05c855dc2b4b58c2933d393d5e0c9", [:mix], [], "hexpm"},
+  "mogrify": {:hex, :mogrify, "0.7.2", "4d00b60288e338028e2af4cccff9b0da365d83b7e5da52e58fb2de513ef5fedd", [:mix], [], "hexpm"},
 }
