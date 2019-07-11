@@ -1,12 +1,12 @@
-defmodule Pngconverter.MixProject do
+defmodule Absinthe.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :pngconverter,
+      app: :absinthe,
       version: "0.1.0",
       elixir: "~> 1.8",
-      escript: [main_module: Pngconverter],
+      escript: [main_module: Absinthe],
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]

@@ -1,4 +1,4 @@
-defmodule Pngconverter.CLI do
+defmodule Absinthe.CLI do
   def parse(args) do
     {opts, _, _} =
       OptionParser.parse(args,

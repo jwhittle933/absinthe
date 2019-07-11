@@ -1,9 +1,9 @@
-defmodule Pngconverter do
+defmodule Absinthe do
   @moduledoc """
   Documentation for Pngconverter.
   """
 
-  alias Pngconverter.CLI
+  alias Absinthe.CLI
 
   @doc """
   Hello world.
