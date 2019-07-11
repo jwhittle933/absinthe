@@ -7,17 +7,19 @@ defmodule Absinthe do
   alias Absinthe.Files
 
   @doc """
-  Hello world.
+  Absinthe
 
   ## Examples
 
-      iex> Pngconverter.hello()
-      :world
+      iex> Absinthe.main(args)
+      []
   """
   def main(args) do
     opts = CLI.parse(args)
     IO.inspect(opts)
     files = Files.get_files(opts)
     IO.inspect(files)
+
+    Files.parse_files(files)
   end
 end
