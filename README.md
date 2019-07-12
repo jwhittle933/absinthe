@@ -19,3 +19,6 @@ Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_do
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at [https://hexdocs.pm/pngconverter](https://hexdocs.pm/pngconverter).
 
+### Resources
+[JPG Format](https://www.file-recovery.com/jpg-signature-format.htm)
+

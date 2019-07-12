@@ -18,9 +18,8 @@ defmodule Absinthe do
   """
   def main(args) do
     opts = CLI.parse(args)
-    files = Files.get_files(opts)
-    IO.inspect(opts)
+    Files.get_file_list(opts) |> Files.parse_files(opts)
 
-    Files.parse_files(files)
+    IO.inspect(opts)
   end
 end
