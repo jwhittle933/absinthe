@@ -1,6 +1,8 @@
 defmodule Absinthe do
   @moduledoc """
-  Documentation for Pngconverter.
+  Documentation for Absinthe
+
+  Entry point for application
   """
 
   alias Absinthe.CLI
@@ -16,9 +18,8 @@ defmodule Absinthe do
   """
   def main(args) do
     opts = CLI.parse(args)
-    IO.inspect(opts)
     files = Files.get_files(opts)
-    IO.inspect(files)
+    IO.inspect(opts)
 
     Files.parse_files(files)
   end

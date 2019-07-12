@@ -17,6 +17,8 @@ defmodule Absinthe.Files.PNG do
       interlace: interlace_method,
       chunks: []
     }
+
+    parse_png_chunks(chunks, png)
   end
 
   defp parse_png_chunks(
