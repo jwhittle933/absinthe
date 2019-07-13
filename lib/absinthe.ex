@@ -9,12 +9,7 @@ defmodule Absinthe do
   alias Absinthe.Files
 
   @doc """
-  Absinthe
-
-  ## Examples
-
-      iex> Absinthe.main(args)
-      []
+  Absinthe Main
   """
   def main(args) do
     opts = CLI.parse(args)
