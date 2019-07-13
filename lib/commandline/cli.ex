@@ -5,7 +5,6 @@ defmodule Absinthe.CLI do
         switches: [path: :string, ext: :string, out: :string],
         aliases: [P: :path, E: :ext, O: :out]
       )
-
     opts
   end
 end

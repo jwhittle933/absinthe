@@ -2,7 +2,7 @@ defmodule Absinthe.Files.PNG do
   alias __MODULE__
   defstruct [:width, :height, :bit_depth, :color_type, :compression, :filter, :interlace, :chunks]
 
-  @doc """
+  @moduledoc """
   89 50 4E 47 0D 0A 1A 0A are the first 8 bytes in the PNG signature (PNG\\r\\n0x1A\\n).
   """
   def parse_png(
