@@ -1,5 +1,6 @@
 defmodule Absinthe.Files.JPG do
   alias __MODULE__
+
   @moduledoc """
   Reference: http://www.fileformat.info/format/jpeg/egff.htm
 
@@ -31,7 +32,7 @@ defmodule Absinthe.Files.JPG do
   Length is the size of the JFIF (APP0) segment, including the length field itself and any thumbnail data contained
   in the APP0 segment. The value of Length = 16 + 3 * XThumbnail * YThumbnail
 
-  Identifier contains teh values 4A 46 49 46 00 (JFIF)
+  Identifier contains the values 4A 46 49 46 00 (JFIF)
 
   Version id's the version of JFIF spec, with the first byte containing the major revision number, the second
   containing the minor revision number.
@@ -48,9 +49,20 @@ defmodule Absinthe.Files.JPG do
   R, G, B). No compression is performed on the thumbnail.
 
   """
-  defstruct [:soi, :app0, :length, :identifier, :version, :units, :xdensity, :ydensity, :xthumbnail, :ythumbnail]
+  defstruct [
+    :soi,
+    :app0,
+    :length,
+    :identifier,
+    :version,
+    :units,
+    :xdensity,
+    :ydensity,
+    :xthumbnail,
+    :ythumbnail
+  ]
 
-  def parse_jpg(path) do
+  def read_jpg(path) do
     r_file = File.open!(path)
     r_file |> IO.binread(:line) |> Base.encode16()
 
@@ -58,4 +70,36 @@ defmodule Absinthe.Files.JPG do
       IO.inspect(r_file)
     end
   end
+
+  def parse_jpg(
+        <<soi::size(16), app0::size(16), length::size(16), id::size(40), version::size(16), units,
+          xdensity, ydensity, xthumb, ythumb, rest::binary>> = file
+      ) do
+    IO.puts("Found JFIF data stream")
+
+    IO.inspect(soi, label: "soi")
+    IO.inspect(app0, label: "app0")
+    IO.inspect(length, label: "length")
+    IO.inspect(id, label: "id")
+    IO.inspect(version, label: "version")
+    IO.inspect(units, label: "units")
+    IO.inspect(xdensity, label: "xdensity")
+    IO.inspect(ydensity, label: "ydensity")
+    IO.inspect(xthumb, label: "xthumb")
+    IO.inspect(ythumb, label: "ythumb")
+    IO.inspect(rest, label: "rest")
+  end
+
+  def parse_jpg(<<soi::size(16), app0::size(16)>>) do
+  end
+
+  def is_jpg?(<<0xFF, 0xD8>>), do: true
+  def is_jpg?(<<>>), do: false
+
+  def is_raw?(
+        <<0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, _rest::binary>>
+      ),
+      do: false
+
+  def is_raw?(<<>>), do: true
 end
