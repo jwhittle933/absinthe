@@ -1,6 +1,7 @@
 defmodule Absinthe.JPG do
   alias __MODULE__
-  alias Absinthe.JPG.Constants
+
+  use Absinthe.JPG.Context
 
   @moduledoc """
   Reference: http://www.fileformat.info/format/jpeg/egff.htm

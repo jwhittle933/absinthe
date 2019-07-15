@@ -12,12 +12,6 @@ defmodule Absinthe.JPG.Context do
     end
   end
 
-  def bits do
-    quote do
-      import Absinthe.JPG.Bits
-    end
-  end
-
   def decoder do
     quote do
       import Absinthe.JPG.Decoder
@@ -30,12 +24,6 @@ defmodule Absinthe.JPG.Context do
     end
   end
 
-  def bytes do
-    quote do
-      import Absinthe.JPG.Bytes
-    end
-  end
-
   defmacro __using__(which) when is_atom(which) do
     quote do
       apply(__MODULE__, which, [])
@@ -45,11 +33,8 @@ defmodule Absinthe.JPG.Context do
   defmacro __using__(_) do
     quote do
       import Absinthe.JPG.Component
-      import Absinthe.JPG.Bits
       import Absinthe.JPG.Decoder
       import Absinthe.JPG.Constants
-      import Absinthe.JPG.Bytes
     end
   end
-
 end

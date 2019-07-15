@@ -1,8 +1,7 @@
-defmodule Absinte.JPG.Decoder do
+defmodule Absinthe.JPG.Decoder do
   @moduledoc false
 
-  use Absinthe.JPG.Context, :bits
-  use Absinthe.JPG.Context, :bytes
+  alias __MODULE__
 
   defstruct [
     :r,
@@ -31,8 +30,8 @@ defmodule Absinte.JPG.Decoder do
 
   @type t() :: %__MODULE__{
           r: iodata(),
-          bits: struct(),
-          bytes: struct(),
+          bits: %Decoder.Bits{},
+          bytes: %Decoder.Bytes{},
           width: integer(),
           height: integer(),
           img1: any(),
@@ -40,12 +39,12 @@ defmodule Absinte.JPG.Decoder do
           black_pix: binary(),
           black_stride: integer(),
           ri: integer(),
-          n_comp: integer(),
+          r_comp: integer(),
           baseline: boolean(),
           progressive: boolean(),
           jfif: boolean(),
-          adobe_transform_valie: boolean(),
-          adobe_tranform: integer(),
+          adobe_transform_valid: boolean(),
+          adobe_transform: integer(),
           eob_run: integer(),
           comp: [struct()],
           prog_coeffs: list(),
@@ -53,4 +52,34 @@ defmodule Absinte.JPG.Decoder do
           quant: list(),
           tmp: [iodata()]
         }
+
+  defmodule Bits do
+    @moduledoc """
+    Bits holds the unprocessee bitst that have been taken from the byte-stream.
+    The n least significant bits of a form the unread bits, to be read in MSB to
+    LSB order
+    """
+
+    @enforce_keys [:a, :m, :n]
+    defstruct [:a, :m, :n]
+
+    @type t() :: %__MODULE__{
+            a: integer(),
+            m: integer(),
+            n: integer()
+          }
+  end
+
+  defmodule Bytes do
+    @moduledoc false
+
+    defstruct [:buf, :i, :j, :n_unreadable]
+
+    @type t() :: %__MODULE__{
+            buf: [iodata()],
+            i: integer(),
+            j: integer(),
+            n_unreadable: integer()
+          }
+  end
 end
