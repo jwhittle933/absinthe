@@ -38,16 +38,15 @@ defmodule Absinthe.JPG.YCBCR do
     @type t() :: %Rectangle{
             min: %Rectangle.Point{},
             max: %Rectangle.Point{}
-    }
-
+          }
 
     defmodule Point do
       defstruct [:x, :y]
 
       @type t() :: %__MODULE__{
-        x: integer(),
-        y: integer()
-      }
+              x: integer(),
+              y: integer()
+            }
     end
   end
 end

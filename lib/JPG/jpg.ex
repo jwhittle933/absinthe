@@ -1,6 +1,5 @@
 defmodule Absinthe.JPG do
   alias __MODULE__
-
   use Absinthe.JPG.Context
 
   @moduledoc """
@@ -76,15 +75,6 @@ defmodule Absinthe.JPG do
     :content
   ]
 
-  def read_jpg(path) do
-    r_file = File.open!(path)
-    r_file |> IO.binread(:line) |> Base.encode16()
-
-    with :ok <- File.close(r_file) do
-      IO.inspect(r_file)
-    end
-  end
-
   def decode(
         <<0xFF, 0xD8, 0xFF, 0xE0, length::binary-size(2), id::binary-size(5),
           version::binary-size(2), units::binary-size(1), xdensity::binary-size(1),
@@ -111,18 +101,22 @@ defmodule Absinthe.JPG do
     }
   end
 
-  def png_to_jpg(path) do
-    Mogrify.open(path) |> Mogrify.format("jpg") |> Mogrify.save()
+  @spec fill(Decoder.t()) :: Decoder.t() | {:error, String.t()}
+  def fill(decoder) do
+    with true <- decoder.bytes.i == decoder.bytes.j do
+      with true <- decoder.bytes.j > 2 do
+        new_val_index = decoder.bytes.j - 2
+        {:ok, new_val} = decoder.bytes.buf |> Enum.fetch(new_val_index)
+        decoder.bytes |> List.replace_at(new_val_index, new_val)
+
+        # implement byte Reader for decoder struct, read buffer bytes, append to decoder.bytes.j, and return decoder
+      else
+        _ ->
+          :error
+      end
+    else
+      _ ->
+        {:error, "jpeg: fill called when unread bytes exist"}
+    end
   end
-
-  def is_jpg?(<<255, 216, _::binary>>), do: true
-  def is_jpg?(<<_::binary>>), do: false
-
-  def is_raw?(<<255, 216, 255, 224, 0, 16, 74, 70, 73, 70, 0, 1, 1, 0, _rest::binary>>),
-    do: false
-
-  def is_raw?(<<_::binary>>), do: true
-
-  def jpg_header(),
-    do: <<0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00>>
 end
