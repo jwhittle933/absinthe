@@ -1,5 +1,7 @@
-defmodule Absinthe.Files.JPG do
+defmodule Absinthe.JPG do
   alias __MODULE__
+
+  use Absinthe.JPG.Context
 
   @moduledoc """
   Reference: http://www.fileformat.info/format/jpeg/egff.htm
@@ -26,37 +28,6 @@ defmodule Absinthe.Files.JPG do
   until the EOI marker will usually allow you to extract the JPEG/JFIF data stream.
   """
 
-  # Start of Frame (Baseline Sequential)
-  @sof0 <<0xC0>>
-  # Start of Frame (Extended Sequential)
-  @sof1 <<0xC1>>
-  # Start of Frame (Progressive)
-  @sof2 <<0xC2>>
-  # ReSTart (0)
-  @rst0 <<0xD0>>
-  # ReSTart (7)
-  @rst7 <<0xD7>>
-  # Start of Image
-  @soi <<0xD8>>
-  # Start of Scan
-  @sos <<0xDA>>
-  # Define Quantization Table
-  @dqt <<0xDB>>
-  # Define Restart Intervael
-  @dri <<0xDD>>
-  # Comment
-  @com <<0xFE>>
-  # JFIF tag
-  @app0 <<0xE0>>
-  # Adobe tag
-  @app14 <<0xEE>>
-  # Graphic Converter
-  @app15 <<0xEF>>
-  # End of Image
-  @eoi <<0xD9>>
-  # Padding
-  @pad <<0x00>>
-
   @doc """
   SOI is is the start of the image, always FF D8
 
@@ -82,6 +53,17 @@ defmodule Absinthe.Files.JPG do
   R, G, B). No compression is performed on the thumbnail.
 
   """
+  @type t() :: %__MODULE__{
+          length: binary(),
+          identifier: binary(),
+          version: binary(),
+          units: binary(),
+          xdensity: binary(),
+          ydensity: binary(),
+          xthumbnail: binary(),
+          ythumbnail: binary(),
+          content: binary()
+        }
   defstruct [
     :length,
     :identifier,
