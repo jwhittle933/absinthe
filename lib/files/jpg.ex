@@ -3,10 +3,12 @@ defmodule Absinthe.Files.JPG do
 
   @moduledoc """
   Reference: http://www.fileformat.info/format/jpeg/egff.htm
+  Reference: https://www.sno.phy.queensu.ca/~phil/exiftool/TagNames/JPEG.html
+  Reference: https://www.impulseadventure.com/photo/jpeg-huffman-coding.html
 
   JPG Header: <<255, 216, 255, 224, 0, 16, 74, 70, 73, 70, 0, 1, 1, 0>>
 
-  Base16: <<0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00 :: size(16)>>
+  Base16: <<0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00>>
   Trailer: <<0xFF, 0xD9>>
 
   The actual JPEG data file follows all APP0 markers.
@@ -23,6 +25,37 @@ defmodule Absinthe.Files.JPG do
   There are many proprietary image file formats which contain JPEG data. Scanning for the JPEG SOI and reading
   until the EOI marker will usually allow you to extract the JPEG/JFIF data stream.
   """
+
+  # Start of Frame (Baseline Sequential)
+  @sof0 <<0xC0>>
+  # Start of Frame (Extended Sequential)
+  @sof1 <<0xC1>>
+  # Start of Frame (Progressive)
+  @sof2 <<0xC2>>
+  # ReSTart (0)
+  @rst0 <<0xD0>>
+  # ReSTart (7)
+  @rst7 <<0xD7>>
+  # Start of Image
+  @soi <<0xD8>>
+  # Start of Scan
+  @sos <<0xDA>>
+  # Define Quantization Table
+  @dqt <<0xDB>>
+  # Define Restart Intervael
+  @dri <<0xDD>>
+  # Comment
+  @com <<0xFE>>
+  # JFIF tag
+  @app0 <<0xE0>>
+  # Adobe tag
+  @app14 <<0xEE>>
+  # Graphic Converter
+  @app15 <<0xEF>>
+  # End of Image
+  @eoi <<0xD9>>
+  # Padding
+  @pad <<0x00>>
 
   @doc """
   SOI is is the start of the image, always FF D8
@@ -50,8 +83,6 @@ defmodule Absinthe.Files.JPG do
 
   """
   defstruct [
-    :soi,
-    :app0,
     :length,
     :identifier,
     :version,
@@ -59,7 +90,8 @@ defmodule Absinthe.Files.JPG do
     :xdensity,
     :ydensity,
     :xthumbnail,
-    :ythumbnail
+    :ythumbnail,
+    :content
   ]
 
   def read_jpg(path) do
@@ -71,36 +103,44 @@ defmodule Absinthe.Files.JPG do
     end
   end
 
-  def parse_jpg(
-        <<soi::size(16), app0::size(16), length::size(16), id::size(40), version::size(16), units,
-          xdensity, ydensity, xthumb, ythumb, rest::binary>> = file
+  def decode(
+        <<0xFF, 0xD8, 0xFF, 0xE0, length::binary-size(2), id::binary-size(5),
+          version::binary-size(2), units::binary-size(1), xdensity::binary-size(1),
+          ydensity::binary-size(1), xthumb::binary-size(3), ythumb::binary-size(3), rest::binary>>
       ) do
     IO.puts("Found JFIF data stream")
 
-    IO.inspect(soi, label: "soi")
-    IO.inspect(app0, label: "app0")
-    IO.inspect(length, label: "length")
-    IO.inspect(id, label: "id")
-    IO.inspect(version, label: "version")
-    IO.inspect(units, label: "units")
-    IO.inspect(xdensity, label: "xdensity")
-    IO.inspect(ydensity, label: "ydensity")
-    IO.inspect(xthumb, label: "xthumb")
-    IO.inspect(ythumb, label: "ythumb")
-    IO.inspect(rest, label: "rest")
+    %JPG{
+      length: length,
+      identifier: id,
+      version: version,
+      units: units,
+      xdensity: xdensity,
+      ydensity: ydensity,
+      xthumbnail: xthumb,
+      ythumbnail: ythumb,
+      content: rest
+    }
   end
 
-  def parse_jpg(<<soi::size(16), app0::size(16)>>) do
+  def decode(<<_soi::binary-size(3), raw::binary>>) do
+    %JPG{
+      content: raw
+    }
   end
 
-  def is_jpg?(<<0xFF, 0xD8>>), do: true
-  def is_jpg?(<<>>), do: false
+  def png_to_jpg(path) do
+    Mogrify.open(path) |> Mogrify.format("jpg") |> Mogrify.save()
+  end
 
-  def is_raw?(
-        <<0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00,
-          _rest::binary>>
-      ),
-      do: false
+  def is_jpg?(<<255, 216, _::binary>>), do: true
+  def is_jpg?(<<_::binary>>), do: false
 
-  def is_raw?(<<>>), do: true
+  def is_raw?(<<255, 216, 255, 224, 0, 16, 74, 70, 73, 70, 0, 1, 1, 0, _rest::binary>>),
+    do: false
+
+  def is_raw?(<<_::binary>>), do: true
+
+  def jpg_header(),
+    do: <<0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00>>
 end
