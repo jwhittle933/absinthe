@@ -1,4 +1,4 @@
-defmodule Absinthe.Files.PNG do
+defmodule Absinthe.PNG do
   alias __MODULE__
 
   @moduledoc """
@@ -34,7 +34,7 @@ defmodule Absinthe.Files.PNG do
     chunk = %{length: length, chunk_type: chunk_type, data: chunk_data, crc: crc}
     png = %{png | chunks: [chunk | png.chunks]}
 
-    parse_png_chunks(chunks, png)
+    decode_chunks(chunks, png)
   end
 
   defp decode_chunks(<<>>, png) do

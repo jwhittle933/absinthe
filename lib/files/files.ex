@@ -1,5 +1,5 @@
 defmodule Absinthe.Files do
-  alias Absinthe.Files.PNG
+  alias Absinthe.PNG
 
   @doc """
   parse_files module function
@@ -51,7 +51,7 @@ defmodule Absinthe.Files do
   end
 
   def show_binary(file) do
-    File.read!(file) |> PNG.parse_png() |> IO.inspect()
+    File.read!(file) |> PNG.decode() |> IO.inspect()
   end
 
   def open_and_read(file) do
