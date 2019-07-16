@@ -114,11 +114,11 @@ defmodule Absinthe.JPG do
   should only be called when there are no unread bytes in decoder.bytes
   """
   @spec fill(Decoder.t()) :: Decoder.t() | no_return()
-  def fill(decoder) when decoder.bytes.i != decoder.bytes.j do
+  def fill(%Decoder{bytes: %{i: i, j: j}}) when i != j do
     raise(UnreadBytesError, message: "jpeg: fill called when uread bytes exist")
   end
 
-  def fill(decoder) when decoder.bytes.j > 2 do
+  def fill(%Decoder{bytes: %{j: j}} = decoder) when j > 2 do
     val_index_0 = decoder.bytes.j - 2
     val_index_1 = decoder.bytes.j - 1
 
@@ -183,7 +183,8 @@ defmodule Absinthe.JPG do
   read_byte returns the next byte, whether buffered or not buffered. It does
   not care about byte stuffing.
   """
-  def read_byte(decoder) when decoder.bytes.i == decoder.bytes.j do
+  @spec read_byte(Decoder.t()) :: Decoder.t() | no_return
+  def read_byte(%Decoder{bytes: %{i: i, j: j}} = decoder) when i == j do
     fill(decoder)
     read_byte(decoder)
   end
@@ -191,5 +192,4 @@ defmodule Absinthe.JPG do
   def read_byte(decoder) do
     %Decoder{decoder | bytes: %{decoder.bytes | i: decoder.bytes.i + 1, n_unreadable: 0}}
   end
-
 end
