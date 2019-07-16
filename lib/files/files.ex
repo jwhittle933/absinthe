@@ -1,6 +1,10 @@
 defmodule Absinthe.Files do
   alias Absinthe.PNG
 
+  @png_signature <<137::size(8), 80::size(8), 78::size(8), 71::size(8), 13::size(8), 10::size(8),
+                   26::size(8), 10::size(8)>>
+  @jpg_signature <<255::size(8), 216::size(8)>>
+
   @doc """
   parse_files module function
   """
@@ -19,6 +23,10 @@ defmodule Absinthe.Files do
     end
   end
 
+  def type(<<@png_signature, rest::binary>>), do: :png
+  def type(<<@jpg_signature, rest::binary>>), do: :jpg
+  def type(_), do: :unknown
+
   @doc """
   get_files
 
@@ -32,11 +40,11 @@ defmodule Absinthe.Files do
   end
 
   @doc """
-  get_mime
+  get_ext
 
   Returns file extension at a given path
   """
-  def get_mime(path) do
+  def get_ext(path) do
     Path.extname(path)
   end
 
@@ -47,7 +55,7 @@ defmodule Absinthe.Files do
   of chosen mimes. Returns true if pattern matches.
   """
   def valid_mime?(path) do
-    ~w(.jpg .jpeg .gif .png .JPG) |> Enum.member?(get_mime(path))
+    ~w(.jpg .jpeg .gif .png .JPG) |> Enum.member?(get_ext(path))
   end
 
   def show_binary(file) do

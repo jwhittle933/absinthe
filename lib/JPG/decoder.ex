@@ -53,6 +53,13 @@ defmodule Absinthe.JPG.Decoder do
           tmp: [iodata()]
         }
 
+  @doc """
+  INCOMPLETE: return decoder with binary list
+  """
+  def new_decoder(bin) do
+    %Decoder{r: :binary.bin_to_list(bin)}
+  end
+
   defmodule Bits do
     @moduledoc """
     Bits holds the unprocessee bitst that have been taken from the byte-stream.

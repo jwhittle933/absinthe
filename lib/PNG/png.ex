@@ -5,6 +5,9 @@ defmodule Absinthe.PNG do
   <<0x89 0x50 0x4E 0x47 0x0D 0x0A 0x1A 0x0A>> are the first 8 bytes in the PNG signature
   """
 
+  @png_signature <<137::size(8), 80::size(8), 78::size(8), 71::size(8), 13::size(8), 10::size(8),
+                   26::size(8), 10::size(8)>>
+
   defstruct [:width, :height, :bit_depth, :color_type, :compression, :filter, :interlace, :chunks]
 
   def decode(
