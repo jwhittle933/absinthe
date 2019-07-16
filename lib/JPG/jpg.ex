@@ -114,35 +114,33 @@ defmodule Absinthe.JPG do
   should only be called when there are no unread bytes in decoder.bytes
   """
   @spec fill(Decoder.t()) :: Decoder.t() | no_return()
+  def fill(decoder) when decoder.bytes.i != decoder.bytes.j do
+    raise(UnreadBytesError, message: "jpeg: fill called when uread bytes exist")
+  end
+
+  def fill(decoder) when decoder.bytes.j > 2 do
+    val_index_0 = decoder.bytes.j - 2
+    val_index_1 = decoder.bytes.j - 1
+
+    {:ok, new_val_0} = decoder.bytes.buf |> Enum.fetch(val_index_0)
+    {:ok, new_val_1} = decoder.bytes.buf |> Enum.fetch(val_index_1)
+
+    new_bytes_list =
+      decoder.bytes.buf
+      |> List.replace_at(val_index_0, new_val_0)
+      |> List.replace_at(val_index_1, new_val_1)
+
+    decoder = %Decoder{decoder | bytes: %{decoder.bytes | buf: new_bytes_list, i: 2, j: 2}}
+    fill(decoder)
+  end
+
   def fill(decoder) do
-    with true <- decoder.bytes.i == decoder.bytes.j do
-      with true <- decoder.bytes.j > 2 do
-        val_index_0 = decoder.bytes.j - 2
-        val_index_1 = decoder.bytes.j - 1
+    range = Range.new(decoder.bytes.j, Enum.count(decoder.bytes.buf) - 1)
+    read_list = decoder.bytes.buf |> Enum.slice(range)
 
-        {:ok, new_val_0} = decoder.bytes.buf |> Enum.fetch(val_index_0)
-        {:ok, new_val_1} = decoder.bytes.buf |> Enum.fetch(val_index_1)
-
-        new_bytes_list =
-          decoder.bytes.buf
-          |> List.replace_at(val_index_0, new_val_0)
-          |> List.replace_at(val_index_1, new_val_1)
-
-        decoder = %Decoder{decoder | bytes: %{decoder.bytes | buf: new_bytes_list, i: 2, j: 2}}
-        fill(decoder)
-      else
-        _ ->
-          range = Range.new(decoder.bytes.j, Enum.count(decoder.bytes.buf) - 1)
-          read_list = decoder.bytes.buf |> Enum.slice(range)
-
-          # =======>>>>>>
-          # implement byte Reader for decoder struct, read buffer bytes, append to decoder.bytes.j, and return decoder
-          # ========>>>>>
-      end
-    else
-      _ ->
-        raise(UnreadBytesError, message: "jpge: fill called when unread bytes exist")
-    end
+    # =======>>>>>>
+    # implement byte Reader for decoder struct, read buffer bytes, append to decoder.bytes.j, and return decoder
+    # ========>>>>>
   end
 
   @doc """
@@ -180,4 +178,18 @@ defmodule Absinthe.JPG do
         }
     end
   end
+
+  @doc """
+  read_byte returns the next byte, whether buffered or not buffered. It does
+  not care about byte stuffing.
+  """
+  def read_byte(decoder) when decoder.bytes.i == decoder.bytes.j do
+    fill(decoder)
+    read_byte(decoder)
+  end
+
+  def read_byte(decoder) do
+    %Decoder{decoder | bytes: %{decoder.bytes | i: decoder.bytes.i + 1, n_unreadable: 0}}
+  end
+
 end
