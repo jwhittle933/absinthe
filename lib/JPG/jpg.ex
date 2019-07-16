@@ -1,5 +1,7 @@
 defmodule Absinthe.JPG do
   alias __MODULE__
+  alias Absinthe.JPG.Decoder
+  use Bitwise, skip_operators: true
 
   @moduledoc """
   Reference: http://www.fileformat.info/format/jpeg/egff.htm
@@ -107,7 +109,11 @@ defmodule Absinthe.JPG do
     }
   end
 
-  @spec fill(Decoder.t()) :: Decoder.t() | {:error, String.t()}
+  @doc """
+  fill fills up the decoder.bytes.buf buffer from the underlying reader. It
+  should only be called when there are no unread bytes in decoder.bytes
+  """
+  @spec fill(Decoder.t()) :: Decoder.t() | no_return()
   def fill(decoder) do
     with true <- decoder.bytes.i == decoder.bytes.j do
       with true <- decoder.bytes.j > 2 do
@@ -122,18 +128,56 @@ defmodule Absinthe.JPG do
           |> List.replace_at(val_index_0, new_val_0)
           |> List.replace_at(val_index_1, new_val_1)
 
-        decoder = %{decoder | bytes: %{decoder.bytes | buf: new_bytes_list, i: 2, j: 2}}
+        decoder = %Decoder{decoder | bytes: %{decoder.bytes | buf: new_bytes_list, i: 2, j: 2}}
         fill(decoder)
       else
         _ ->
           range = Range.new(decoder.bytes.j, Enum.count(decoder.bytes.buf) - 1)
           read_list = decoder.bytes.buf |> Enum.slice(range)
 
+          # =======>>>>>>
           # implement byte Reader for decoder struct, read buffer bytes, append to decoder.bytes.j, and return decoder
+          # ========>>>>>
       end
     else
       _ ->
         raise(UnreadBytesError, message: "jpge: fill called when unread bytes exist")
+    end
+  end
+
+  @doc """
+  unread_byte_stuff_byte undoes the most recent read_byte_stuffed_byte call,
+  giving a byte of data back from decoder.bits to decoder.bytes. The Huffman
+  look-up table requires at least 8 bits for look-up, which means the Huffman
+  decoding can sometimes overshoot and read one or two too many bytes. Two-byte
+  overshoot can happen when expecting to read a 0xFF 0x00 byte-stuffed byte.
+  """
+  @spec unread_byte_stuffed_byte(Decoder.t()) :: Decoder.t() | {:error, String.t()}
+  def unread_byte_stuffed_byte(decoder) do
+    with true <- decoder.bits.n >= 8 do
+      a_shift_right = bsr(decoder.bits.a, 8)
+      new_n = decoder.bits.n - 8
+      m_shift_right = bsr(decoder.bits.m, 8)
+
+      %Decoder{
+        decoder
+        | bits: %{decoder.bits | a: a_shift_right, m: m_shift_right, n: new_n},
+          bytes: %{
+            decoder.bytes
+            | i: decoder.bytes.i - decoder.bytes.n_unreadable,
+              n_unreadable: 0
+          }
+      }
+    else
+      _ ->
+        %Decoder{
+          decoder
+          | bytes: %{
+              decoder.bytes
+              | i: decoder.bytes.i - decoder.bytes.n_unreadable,
+                n_unreadable: 0
+            }
+        }
     end
   end
 end
