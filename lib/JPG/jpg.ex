@@ -28,9 +28,18 @@ defmodule Absinthe.JPG do
   until the EOI marker will usually allow you to extract the JPEG/JFIF data stream.
   """
 
+  @jpg_signature <<255::size(8), 216::size(8)>>
+
   defmodule UnreadBytesError do
     @moduledoc """
     Error raised when fill() called with unread bytes
+    """
+    defexception [:message]
+  end
+
+  defmodule MissingFF00 do
+    @moduledoc """
+    Error raised when missing <<0xFF, 0x00>>
     """
     defexception [:message]
   end
@@ -114,7 +123,7 @@ defmodule Absinthe.JPG do
   should only be called when there are no unread bytes in decoder.bytes
   """
   @spec fill(Decoder.t()) :: Decoder.t() | no_return()
-  def fill(%Decoder{bytes: %{i: i, j: j}}) when i != j do
+  def fill(%Decoder{bytes: %Decoder.Bytes{i: i, j: j}}) when i != j do
     raise(UnreadBytesError, message: "jpeg: fill called when uread bytes exist")
   end
 
@@ -122,15 +131,21 @@ defmodule Absinthe.JPG do
     val_index_0 = decoder.bytes.j - 2
     val_index_1 = decoder.bytes.j - 1
 
-    {:ok, new_val_0} = decoder.bytes.buf |> Enum.fetch(val_index_0)
-    {:ok, new_val_1} = decoder.bytes.buf |> Enum.fetch(val_index_1)
+    {:ok, new_val_0} = decoder.bytes.buf |> binary_part(val_index_0, 1)
+    {:ok, new_val_1} = decoder.bytes.buf |> binary_part(val_index_1, 1)
 
     new_bytes_list =
       decoder.bytes.buf
+      |> :binary.bin_to_list()
       |> List.replace_at(val_index_0, new_val_0)
       |> List.replace_at(val_index_1, new_val_1)
+      |> Enum.into(<<>>, fn byte -> <<byte::binary>> end)
 
-    decoder = %Decoder{decoder | bytes: %{decoder.bytes | buf: new_bytes_list, i: 2, j: 2}}
+    decoder = %Decoder{
+      decoder
+      | bytes: %Decoder.Bytes{decoder.bytes | buf: new_bytes_list, i: 2, j: 2}
+    }
+
     fill(decoder)
   end
 
@@ -144,6 +159,58 @@ defmodule Absinthe.JPG do
   end
 
   @doc """
+  read_byte_stuffed_byte is like read_byte but is for byte-stuffed Huffman data
+  """
+  @spec read_byte_stuffed_byte(Decoder.t()) :: {:ok, iodata(), Decoder.t()} | no_return
+  def read_byte_stuffed_byte(%Decoder{bytes: %Decoder.Bytes{i: i, j: j}} = decoder)
+      when i + 2 <= j do
+    {:ok, x} = decoder.bytes.buf |> binary_part(i, 1)
+
+    decoder = %Decoder{
+      decoder
+      | bytes: %Decoder.Bytes{decoder.bytes | i: decoder.bytes.i + 1, n_unreadable: 1}
+    }
+
+    with true <- x != <<0xFF>> do
+      {:ok, x, decoder}
+    else
+      false ->
+        with false <- {:ok, <<0x00>>} = decoder.bytes.buf |> binary_part(decoder.bytes.i, 1) do
+          {:error, 0, decoder}
+        else
+          _ ->
+            decoder = %Decoder{
+              decoder
+              | bytes: %Decoder.Bytes{decoder.bytes | i: decoder.bytes.i + 1, n_unreadable: 2}
+            }
+
+            {:ok, <<0xFF>>, decoder}
+        end
+    end
+  end
+
+  @spec read_byte_stuffed_byte(Decoder.t()) :: {:ok, iodata(), Decoder.t()} | no_return
+  def read_byte_stuffed_byte(%Decoder{} = decoder) do
+    {x, decoder} =
+      %Decoder{decoder | bytes: %Decoder.Bytes{decoder.bytes | n_unreadable: 0}}
+      |> read_byte
+
+    decoder = %Decoder{decoder | bytes: %Decoder.Bytes{n_unreadable: 1}}
+
+    with true <- x != <<0xFF>> do
+      {:ok, x, decoder}
+    else
+      _ ->
+        {x, decoder} = decoder |> read_byte
+        decoder = %Decoder{decoder | bytes: %Decoder.Bytes{n_unreadable: 2}}
+
+        unless x == <<0x00>>,
+          do: raise(MissingFF00, message: "missing <<0xFF, 0x00>> byte sequence")
+        {:ok, <<0xFF>>, decoder}
+    end
+  end
+
+  @doc """
   unread_byte_stuff_byte undoes the most recent read_byte_stuffed_byte call,
   giving a byte of data back from decoder.bits to decoder.bytes. The Huffman
   look-up table requires at least 8 bits for look-up, which means the Huffman
@@ -151,7 +218,7 @@ defmodule Absinthe.JPG do
   overshoot can happen when expecting to read a 0xFF 0x00 byte-stuffed byte.
   """
   @spec unread_byte_stuffed_byte(Decoder.t()) :: Decoder.t() | {:error, String.t()}
-  def unread_byte_stuffed_byte(decoder) do
+  def unread_byte_stuffed_byte(%Decoder{} = decoder) do
     with true <- decoder.bits.n >= 8 do
       a_shift_right = bsr(decoder.bits.a, 8)
       new_n = decoder.bits.n - 8
@@ -159,8 +226,8 @@ defmodule Absinthe.JPG do
 
       %Decoder{
         decoder
-        | bits: %{decoder.bits | a: a_shift_right, m: m_shift_right, n: new_n},
-          bytes: %{
+        | bits: %Decoder.Bits{decoder.bits | a: a_shift_right, m: m_shift_right, n: new_n},
+          bytes: %Decoder.Bytes{
             decoder.bytes
             | i: decoder.bytes.i - decoder.bytes.n_unreadable,
               n_unreadable: 0
@@ -170,7 +237,7 @@ defmodule Absinthe.JPG do
       _ ->
         %Decoder{
           decoder
-          | bytes: %{
+          | bytes: %Decoder.Bytes{
               decoder.bytes
               | i: decoder.bytes.i - decoder.bytes.n_unreadable,
                 n_unreadable: 0
@@ -183,13 +250,15 @@ defmodule Absinthe.JPG do
   read_byte returns the next byte, whether buffered or not buffered. It does
   not care about byte stuffing.
   """
-  @spec read_byte(Decoder.t()) :: Decoder.t() | no_return
-  def read_byte(%Decoder{bytes: %{i: i, j: j}} = decoder) when i == j do
+  @spec read_byte(Decoder.t()) :: {integer(), Decoder.t()} | no_return
+  def read_byte(%Decoder{bytes: %Decoder.Bytes{i: i, j: j}} = decoder) when i == j do
     fill(decoder)
-    read_byte(decoder)
+    |> read_byte
   end
 
-  def read_byte(decoder) do
-    %Decoder{decoder | bytes: %{decoder.bytes | i: decoder.bytes.i + 1, n_unreadable: 0}}
+  @spec read_byte(Decoder.t()) :: {integer(), Decoder.t()} | no_return
+  def read_byte(%Decoder{bytes: %Decoder.Bytes{buf: buf, i: i}} = decoder) do
+    {binary_part(buf, i, 1),
+     %Decoder{decoder | bytes: %{decoder.bytes | i: decoder.bytes.i + 1, n_unreadable: 0}}}
   end
 end
