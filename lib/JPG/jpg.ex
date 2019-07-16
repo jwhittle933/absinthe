@@ -176,7 +176,7 @@ defmodule Absinthe.JPG do
     else
       false ->
         with false <- {:ok, <<0x00>>} = decoder.bytes.buf |> binary_part(decoder.bytes.i, 1) do
-          {:error, 0, decoder}
+          raise(MissingFF00, message: "missing <<0xFF, 0x00>> byte sequence")
         else
           _ ->
             decoder = %Decoder{
@@ -206,6 +206,7 @@ defmodule Absinthe.JPG do
 
         unless x == <<0x00>>,
           do: raise(MissingFF00, message: "missing <<0xFF, 0x00>> byte sequence")
+
         {:ok, <<0xFF>>, decoder}
     end
   end
@@ -260,5 +261,11 @@ defmodule Absinthe.JPG do
   def read_byte(%Decoder{bytes: %Decoder.Bytes{buf: buf, i: i}} = decoder) do
     {binary_part(buf, i, 1),
      %Decoder{decoder | bytes: %{decoder.bytes | i: decoder.bytes.i + 1, n_unreadable: 0}}}
+  end
+
+  @doc """
+  read_full reads exactly length n of decoder.bytes.buf
+  """
+  def read_full(%Decoder{} = decoder) do
   end
 end
