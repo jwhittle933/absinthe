@@ -1,6 +1,5 @@
 defmodule Absinthe.JPG do
   alias __MODULE__
-  use Absinthe.JPG.Context
 
   @moduledoc """
   Reference: http://www.fileformat.info/format/jpeg/egff.htm
@@ -26,6 +25,13 @@ defmodule Absinthe.JPG do
   There are many proprietary image file formats which contain JPEG data. Scanning for the JPEG SOI and reading
   until the EOI marker will usually allow you to extract the JPEG/JFIF data stream.
   """
+
+  defmodule UnreadBytesError do
+    @moduledoc """
+    Error raised when fill() called with unread bytes
+    """
+    defexception [:message]
+  end
 
   @doc """
   SOI is is the start of the image, always FF D8
@@ -53,15 +59,15 @@ defmodule Absinthe.JPG do
 
   """
   @type t() :: %__MODULE__{
-          length: binary(),
-          identifier: binary(),
-          version: binary(),
-          units: binary(),
-          xdensity: binary(),
-          ydensity: binary(),
-          xthumbnail: binary(),
-          ythumbnail: binary(),
-          content: binary()
+          length: iodata(),
+          identifier: iodata(),
+          version: iodata(),
+          units: iodata(),
+          xdensity: iodata(),
+          ydensity: iodata(),
+          xthumbnail: iodata(),
+          ythumbnail: iodata(),
+          content: iodata()
         }
   defstruct [
     :length,
@@ -105,18 +111,29 @@ defmodule Absinthe.JPG do
   def fill(decoder) do
     with true <- decoder.bytes.i == decoder.bytes.j do
       with true <- decoder.bytes.j > 2 do
-        new_val_index = decoder.bytes.j - 2
-        {:ok, new_val} = decoder.bytes.buf |> Enum.fetch(new_val_index)
-        decoder.bytes |> List.replace_at(new_val_index, new_val)
+        val_index_0 = decoder.bytes.j - 2
+        val_index_1 = decoder.bytes.j - 1
 
-        # implement byte Reader for decoder struct, read buffer bytes, append to decoder.bytes.j, and return decoder
+        {:ok, new_val_0} = decoder.bytes.buf |> Enum.fetch(val_index_0)
+        {:ok, new_val_1} = decoder.bytes.buf |> Enum.fetch(val_index_1)
+
+        new_bytes_list =
+          decoder.bytes.buf
+          |> List.replace_at(val_index_0, new_val_0)
+          |> List.replace_at(val_index_1, new_val_1)
+
+        decoder = %{decoder | bytes: %{decoder.bytes | buf: new_bytes_list, i: 2, j: 2}}
+        fill(decoder)
       else
         _ ->
-          :error
+          range = Range.new(decoder.bytes.j, Enum.count(decoder.bytes.buf) - 1)
+          read_list = decoder.bytes.buf |> Enum.slice(range)
+
+          # implement byte Reader for decoder struct, read buffer bytes, append to decoder.bytes.j, and return decoder
       end
     else
       _ ->
-        {:error, "jpeg: fill called when unread bytes exist"}
+        raise(UnreadBytesError, message: "jpge: fill called when unread bytes exist")
     end
   end
 end
