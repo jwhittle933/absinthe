@@ -8,6 +8,8 @@ defmodule Absinthe.JPG do
   Reference: https://www.sno.phy.queensu.ca/~phil/exiftool/TagNames/JPEG.html
   Reference: https://www.impulseadventure.com/photo/jpeg-huffman-coding.html
 
+  A port of the Golang image/jpeg package.
+
   JPG Header: <<255, 216, 255, 224, 0, 16, 74, 70, 73, 70, 0, 1, 1, 0>>
 
   Base16: <<0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00>>
@@ -287,10 +289,26 @@ defmodule Absinthe.JPG do
     list_portion = decoder.bytes.buf |> Enum.slice(Range.new(i, j))
   end
 
-  @spec copy(list(integer()), list(integer())) :: {list(integer()), integer()} | no_return
-  defp copy([], _src), do: {[], 0}
+  @doc """
+  read_full_reader recursive helper func for read_full
+  """
+  defp read_full_reader(decoder, bin_list, []) do
+    #
+  end
 
-  defp copy(dst, src) do
+  @doc """
+  Reference: https://stackoverflow.com/questions/32642907/how-does-the-copy-function-work
+
+  copy copies elements from a source slice into a destination slice.
+  The source and destination may overlap. Copy returns the new list and the
+  number of elements copied, which will be the minimum of length(src) and length(dst).
+  """
+  @spec copy(list(integer()), list(integer())) ::
+          {list(integer() | none()), integer()} | {:atom, integer()}
+  def copy([], _src), do: {:error, 0}
+  def copy(dst, []), do: {dst, 0}
+
+  def copy(dst, src) do
     # subtract 1 from each value for index use
     dst_l = Enum.count(dst) - 1
     src_l = Enum.count(src) - 1
