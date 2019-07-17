@@ -1,4 +1,7 @@
 %{
+  "bunt": {:hex, :bunt, "0.2.0", "951c6e801e8b1d2cbe58ebbd3e616a869061ddadcc4863d0a2182541acae9a38", [:mix], [], "hexpm"},
   "cli_spinners": {:hex, :cli_spinners, "0.1.0", "08d89c6f1840a8927daed48c675ecb2f20c05c855dc2b4b58c2933d393d5e0c9", [:mix], [], "hexpm"},
+  "credo": {:hex, :credo, "1.0.5", "fdea745579f8845315fe6a3b43e2f9f8866839cfbc8562bb72778e9fdaa94214", [:mix], [{:bunt, "~> 0.2.0", [hex: :bunt, repo: "hexpm", optional: false]}, {:jason, "~> 1.0", [hex: :jason, repo: "hexpm", optional: false]}], "hexpm"},
+  "jason": {:hex, :jason, "1.1.2", "b03dedea67a99223a2eaf9f1264ce37154564de899fd3d8b9a21b1a6fd64afe7", [:mix], [{:decimal, "~> 1.0", [hex: :decimal, repo: "hexpm", optional: true]}], "hexpm"},
   "mogrify": {:hex, :mogrify, "0.7.2", "4d00b60288e338028e2af4cccff9b0da365d83b7e5da52e58fb2de513ef5fedd", [:mix], [], "hexpm"},
 }

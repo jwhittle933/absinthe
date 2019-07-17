@@ -30,14 +30,14 @@ defmodule Absinthe.JPG do
 
   @jpg_signature <<255::size(8), 216::size(8)>>
 
-  defmodule UnreadBytesError do
+  defmodule ExceptionUnreadBytesError do
     @moduledoc """
     Error raised when fill() called with unread bytes
     """
     defexception [:message]
   end
 
-  defmodule MissingFF00 do
+  defmodule ExceptionMissingFF00 do
     @moduledoc """
     Error raised when missing <<0xFF, 0x00>>
     """
@@ -124,7 +124,7 @@ defmodule Absinthe.JPG do
   """
   @spec fill(Decoder.t()) :: Decoder.t() | no_return()
   def fill(%Decoder{bytes: %Decoder.Bytes{i: i, j: j}}) when i != j do
-    raise(UnreadBytesError, message: "jpeg: fill called when uread bytes exist")
+    raise(ExceptionUnreadBytesError, message: "jpeg: fill called when uread bytes exist")
   end
 
   def fill(%Decoder{bytes: %{j: j}} = decoder) when j > 2 do
@@ -176,7 +176,7 @@ defmodule Absinthe.JPG do
     else
       false ->
         with false <- {:ok, <<0x00>>} = decoder.bytes.buf |> binary_part(decoder.bytes.i, 1) do
-          raise(MissingFF00, message: "missing <<0xFF, 0x00>> byte sequence")
+          raise(ExceptionMissingFF00, message: "missing <<0xFF, 0x00>> byte sequence")
         else
           _ ->
             decoder = %Decoder{
@@ -205,7 +205,7 @@ defmodule Absinthe.JPG do
         decoder = %Decoder{decoder | bytes: %Decoder.Bytes{n_unreadable: 2}}
 
         unless x == <<0x00>>,
-          do: raise(MissingFF00, message: "missing <<0xFF, 0x00>> byte sequence")
+          do: raise(ExceptionMissingFF00, message: "missing <<0xFF, 0x00>> byte sequence")
 
         {:ok, <<0xFF>>, decoder}
     end
@@ -253,7 +253,8 @@ defmodule Absinthe.JPG do
   """
   @spec read_byte(Decoder.t()) :: {integer(), Decoder.t()} | no_return
   def read_byte(%Decoder{bytes: %Decoder.Bytes{i: i, j: j}} = decoder) when i == j do
-    fill(decoder)
+    decoder
+    |> fill
     |> read_byte
   end
 
@@ -266,6 +267,55 @@ defmodule Absinthe.JPG do
   @doc """
   read_full reads exactly length n of decoder.bytes.buf
   """
-  def read_full(%Decoder{} = decoder) do
+  def read_full(
+        %Decoder{bytes: %Decoder.Bytes{n_unreadable: n}, bits: %Decoder.Bits{n: n}} = decoder,
+        bin_list
+      )
+      when n != 0 and n >= 8 do
+    decoder
+    |> unread_byte_stuffed_byte()
+    |> read_full(bin_list)
+  end
+
+  def read_full(%Decoder{bytes: %Decoder.Bytes{n_unreadable: n}} = decoder, bin_list)
+      when n != 0 do
+    %Decoder{decoder | bytes: %Decoder.Bytes{decoder.bytes | n_unreadable: 0}}
+    |> read_full(bin_list)
+  end
+
+  def read_full(%Decoder{bytes: %Decoder.Bytes{i: i, j: j}} = decoder, bin_list) do
+    list_portion = decoder.bytes.buf |> Enum.slice(Range.new(i, j))
+  end
+
+  @spec copy(list(integer()), list(integer())) :: {list(integer()), integer()} | no_return
+  defp copy([], _src), do: {[], 0}
+
+  defp copy(dst, src) do
+    # subtract 1 from each value for index use
+    dst_l = Enum.count(dst) - 1
+    src_l = Enum.count(src) - 1
+
+    case dst_l >= src_l do
+      true ->
+        case dst_l > src_l do
+          true ->
+            {smaller_src_to_dst({src, src_l}, {dst, dst_l}), src_l + 1}
+
+          false ->
+            {src, src_l}
+        end
+
+      false ->
+        {larger_src_to_dst({src, src_l}, {dst, dst_l}), dst_l + 1}
+    end
+  end
+
+  defp smaller_src_to_dst({src, src_l}, {dst, dst_l}) do
+    dst_tail = dst |> Enum.slice(Range.new(src_l, dst_l))
+    src ++ dst_tail
+  end
+
+  defp larger_src_to_dst({src, src_l}, {dst, dst_l}) do
+    src |> Enum.slice(Range.new(0, dst_l))
   end
 end
