@@ -26,7 +26,8 @@ defmodule Absinthe.MixProject do
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
       {:cli_spinners, "~> 0.1.0"},
       {:mogrify, "~> 0.7.2"},
-      {:credo, "~> 1.0.0", only: [:dev, :test], runtime: false}
+      {:credo, "~> 1.0.0", only: [:dev, :test], runtime: false},
+      {:dogma, "~> 0.1", only: [:dev]}
     ]
   end
 end
