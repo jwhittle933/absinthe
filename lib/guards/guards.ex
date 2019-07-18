@@ -1,4 +1,7 @@
-defmodule Absinthe.Guards do
+defmodule Metallurgy.Guards do
+  @moduledoc """
+  Metallurgy guards
+  """
   defguard is_JPG(value) when binary_part(value, 0, 2) == <<255, 216>>
 
   defguard is_JFIF(value)

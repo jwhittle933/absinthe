@@ -1,4 +1,4 @@
-# Absinthe
+# Metallurgy
 
 **TODO: Add description**
 
@@ -10,7 +10,7 @@ by adding `absinthe` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:absinthe, "~> 0.1.0"}
+    {:metallurgy, "~> 0.1.0"}
   ]
 end
 ```
