@@ -271,10 +271,11 @@ defmodule Absinthe.JPG do
   """
   @spec read_full(Decoder.t(), [iodata()]) :: Decoder.t() | no_return
   def read_full(
-        %Decoder{bytes: %Decoder.Bytes{n_unreadable: n}, bits: %Decoder.Bits{n: n}} = decoder,
+        %Decoder{bytes: %Decoder.Bytes{n_unreadable: n_unreadable}, bits: %Decoder.Bits{n: n}} =
+          decoder,
         bin_list
       )
-      when n != 0 and n >= 8 do
+      when n_unreadable != 0 and n >= 8 do
     decoder
     |> unread_byte_stuffed_byte()
     |> read_full(bin_list)
@@ -307,6 +308,47 @@ defmodule Absinthe.JPG do
         decoder
         |> fill
         |> read_full_looper(dst, src)
+    end
+  end
+
+  @doc """
+  ignore ignores the next n bytes
+  """
+  @spec ignore(Decoder.t(), integer()) :: Decoder.t() | no_return
+  def ignore(
+        %Decoder{bytes: %Decoder.Bytes{n_unreadable: n}, bits: %Decoder.Bits{n: n}} = decoder,
+        n
+      )
+      when n_unreadable != 0 and n >= 8 do
+    decoder
+    |> unread_byte_stuffed_byte
+    |> ignore(n)
+  end
+
+  def ignore(%Decoder{bytes: %Decoder.Bytes{n_unreadable: n}} = decoder, n) when n != 0 do
+    %Decoder{decoder | bytes: %Decoder.Bytes{decoder.bytes | n_unreadable: 0}}
+    |> ignore(n)
+  end
+
+  @doc """
+  ignore_looper recursive helper for ignore
+  """
+  def ignore_looper(%Decoder{bytes: %Decoder.Bytes{j: j, i: i}} = decoder, n) do
+    m =
+      case j - i > n do
+        true -> n
+        false -> j - i
+    end
+
+    decoder = %Decoder{decoder | bytes: %Decoder.Bytes{decoder.bytes | i: decoder.bytes.i + m}}
+
+    with true <- n == 0 do
+      decoder
+    else
+      _ ->
+        decoder
+        |> fill
+        |> ignore_looper(n)
     end
   end
 
