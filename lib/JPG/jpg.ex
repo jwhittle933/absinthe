@@ -269,6 +269,7 @@ defmodule Absinthe.JPG do
   @doc """
   read_full reads exactly length n of decoder.bytes.buf
   """
+  @spec read_full(Decoder.t(), [iodata()]) :: Decoder.t() | no_return
   def read_full(
         %Decoder{bytes: %Decoder.Bytes{n_unreadable: n}, bits: %Decoder.Bits{n: n}} = decoder,
         bin_list
@@ -286,14 +287,27 @@ defmodule Absinthe.JPG do
   end
 
   def read_full(%Decoder{bytes: %Decoder.Bytes{i: i, j: j}} = decoder, bin_list) do
-    list_portion = decoder.bytes.buf |> Enum.slice(Range.new(i, j))
+    src = decoder.bytes.buf |> Enum.slice(Range.new(i, j))
+    {decoder, _, _} = read_full_looper(decoder, bin_list, src)
+    decoder
   end
 
   @doc """
-  read_full_reader recursive helper func for read_full
+  read_full_looper recursive helper func for read_full
   """
-  defp read_full_reader(decoder, bin_list, []) do
-    #
+  defp read_full_looper(decoder, dst, src) do
+    {dst, n} = copy(dst, src)
+    dst = dst |> Enum.slice(Range.new(n, Enum.count(dst) - 1))
+    decoder = %Decoder{decoder | bytes: %Decoder.Bytes{decoder.bytes | i: decoder.bytes.i + n}}
+
+    with true <- dst == [] do
+      {decoder, dst, src}
+    else
+      _ ->
+        decoder
+        |> fill
+        |> read_full_looper(dst, src)
+    end
   end
 
   @doc """
