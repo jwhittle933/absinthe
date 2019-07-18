@@ -1,7 +1,7 @@
 defmodule Absinthe.JPG do
   alias __MODULE__
   alias Absinthe.JPG.Decoder
-  use Bitwise, skip_operators: true
+  use Bitwise
 
   @moduledoc """
   Reference: http://www.fileformat.info/format/jpeg/egff.htm
@@ -42,6 +42,20 @@ defmodule Absinthe.JPG do
   defmodule ExceptionMissingFF00 do
     @moduledoc """
     Error raised when missing <<0xFF, 0x00>>
+    """
+    defexception [:message]
+  end
+
+  defmodule ExceptionFormatError do
+    @moduledoc """
+    Error when multiple SOF markers are detected
+    """
+    defexception [:message]
+  end
+
+  defmodule ExceptionUnsupportedError do
+    @moduledoc """
+    Error raised number of components exceeds the normal amount
     """
     defexception [:message]
   end
@@ -288,15 +302,15 @@ defmodule Absinthe.JPG do
   end
 
   def read_full(%Decoder{bytes: %Decoder.Bytes{i: i, j: j}} = decoder, bin_list) do
-    src = decoder.bytes.buf |> Enum.slice(Range.new(i, j))
-    {decoder, _, _} = read_full_looper(decoder, bin_list, src)
+    {decoder, _, _} = read_full_looper(decoder, bin_list)
     decoder
   end
 
   @doc """
   read_full_looper recursive helper func for read_full
   """
-  defp read_full_looper(decoder, dst, src) do
+  defp read_full_looper(decoder, dst) do
+    src = decoder.bytes.buf |> Enum.slice(Range.new(i, j))
     {dst, n} = copy(dst, src)
     dst = dst |> Enum.slice(Range.new(n, Enum.count(dst) - 1))
     decoder = %Decoder{decoder | bytes: %Decoder.Bytes{decoder.bytes | i: decoder.bytes.i + n}}
@@ -330,6 +344,10 @@ defmodule Absinthe.JPG do
     |> ignore(n)
   end
 
+  def ignore(%Decoder{} = decoder, n) do
+    decoder |> ignore_looper(n)
+  end
+
   @doc """
   ignore_looper recursive helper for ignore
   """
@@ -350,6 +368,43 @@ defmodule Absinthe.JPG do
         |> fill
         |> ignore_looper(n)
     end
+  end
+
+  @doc """
+  process_sof
+  """
+  @spec process_sof(Decoder.t(), integer()) :: Decoder.t() | no_return
+  def process_sof(%{Decoder{n_comp: n}}, _) when n != 0, do: raise(ExceptionFormatError, message: "multiple SOF markers")
+
+  def process_sof(%Decoder{tmp: tmp} = decoder, n) do
+    sl = tmp |> Enum.slice(Range.new(0, n - 1))
+    decoder =
+      decoder
+      |> determine_components(n)
+      |> read_full(sl)
+
+    unless decoder.tmp |> List.first == 8, do: raise(ExceptionUnsupportedError, message: "Precision: only 8-bit precision is supported")
+
+    decoder =
+      decoder
+    |> (fn n -> %Decoder{height: } end)
+  end
+
+  defp determine_components(decoder, n) do
+    n |>
+      case do
+        6 + 3 * 1 ->
+          # Grayscale image
+          %Decoder{decoder | n_comp: 1}
+        6 + 3 * 3 ->
+          # YCbCr or RGB image
+          %Decoder{decoder | n_comp: 3}
+        6 + 3 * 4 ->
+          # YCbCrK or CMYK image
+          %Decoder{decoder | n_comp: 4}
+        _ ->
+          raise(ExceptionUnsupportedError, message: "number of components")
+      end
   end
 
   @doc """
