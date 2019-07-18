@@ -1,6 +1,8 @@
 defmodule Metallurgy.MixProject do
   use Mix.Project
 
+  @test_envs [:test, :integration]
+
   def project do
     [
       app: :metallurgy,
@@ -8,6 +10,8 @@ defmodule Metallurgy.MixProject do
       elixir: "~> 1.8",
       escript: [main_module: Metallurgy],
       start_permanent: Mix.env() == :prod,
+      elixirc_paths: elixirc_paths(Mix.env()),
+      test_paths: test_paths(Mix.env()),
       deps: deps()
     ]
   end
@@ -30,4 +34,10 @@ defmodule Metallurgy.MixProject do
       {:dogma, "~> 0.1", only: [:dev]}
     ]
   end
+
+  defp elixirc_paths(env) when env in @test_envs, do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
+  defp test_paths(:integration), do: ["test/integration"]
+  defp test_paths(:test), do: ["test/unit"]
+  defp test_paths(_), do: ["test/dev"]
 end

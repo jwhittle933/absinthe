@@ -62,7 +62,7 @@ defmodule Metallurgy.Files do
   end
 
   def show_binary(file) do
-    file |> File.read! |> PNG.decode() |> IO.inspect()
+    file |> File.read!() |> PNG.decode() |> IO.inspect()
   end
 
   def open_and_read(file) do
