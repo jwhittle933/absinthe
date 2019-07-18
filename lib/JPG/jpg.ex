@@ -338,7 +338,7 @@ defmodule Absinthe.JPG do
       case j - i > n do
         true -> n
         false -> j - i
-    end
+      end
 
     decoder = %Decoder{decoder | bytes: %Decoder.Bytes{decoder.bytes | i: decoder.bytes.i + m}}
 
