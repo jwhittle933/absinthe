@@ -1,4 +1,4 @@
-defmodule Absinthe.PNG do
+defmodule Metallurgy.PNG do
   alias __MODULE__
 
   @moduledoc """

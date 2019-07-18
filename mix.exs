@@ -1,12 +1,12 @@
-defmodule Absinthe.MixProject do
+defmodule Metallurgy.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :absinthe,
+      app: :metallurgy,
       version: "0.1.0",
       elixir: "~> 1.8",
-      escript: [main_module: Absinthe],
+      escript: [main_module: Metallurgy],
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]

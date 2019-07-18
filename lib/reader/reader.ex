@@ -1,10 +1,10 @@
-defmodule Absinthe.Reader do
+defmodule Metallurgy.Reader do
   @moduledoc """
   Reader method for reading bytes from parsed files
   """
   alias __MODULE__
 
-  defmodule NotBinary do
+  defmodule ExceptionNotBinary do
     @moduledoc """
     Exception raised when a non-binary argument is passed to new_reader
     """
@@ -44,6 +44,6 @@ defmodule Absinthe.Reader do
   end
 
   def read(_, _) do
-    raise(NotBinary, message: "binary error: argument passed to read must binary iodata")
+    raise(ExceptionNotBinary, message: "binary error: argument passed to read must binary iodata")
   end
 end

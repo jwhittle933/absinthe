@@ -1,4 +1,4 @@
-defmodule Absinthe.JPG.Decoder do
+defmodule Metallurgy.JPG.Decoder do
   @moduledoc false
 
   alias __MODULE__

@@ -1,4 +1,7 @@
-defmodule Absinthe.CLI do
+defmodule Metallurgy.CLI do
+  @moduledoc """
+  Metallurgy cli module
+  """
   def parse(args) do
     {opts, _, _} =
       OptionParser.parse(args,

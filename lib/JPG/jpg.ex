@@ -1,6 +1,6 @@
-defmodule Absinthe.JPG do
+defmodule Metallurgy.JPG do
   alias __MODULE__
-  alias Absinthe.JPG.Decoder
+  alias Metallurgy.JPG.Decoder
   use Bitwise
 
   @moduledoc """
@@ -301,7 +301,7 @@ defmodule Absinthe.JPG do
     |> read_full(bin_list)
   end
 
-  def read_full(%Decoder{bytes: %Decoder.Bytes{i: i, j: j}} = decoder, bin_list) do
+  def read_full(decoder, bin_list) do
     {decoder, _, _} = read_full_looper(decoder, bin_list)
     decoder
   end
@@ -309,7 +309,7 @@ defmodule Absinthe.JPG do
   @doc """
   read_full_looper recursive helper func for read_full
   """
-  defp read_full_looper(decoder, dst) do
+  defp read_full_looper(%Decoder{bytes: %Decoder.Bytes{i: i, j: j}} = decoder, dst) do
     src = decoder.bytes.buf |> Enum.slice(Range.new(i, j))
     {dst, n} = copy(dst, src)
     dst = dst |> Enum.slice(Range.new(n, Enum.count(dst) - 1))
@@ -321,7 +321,7 @@ defmodule Absinthe.JPG do
       _ ->
         decoder
         |> fill
-        |> read_full_looper(dst, src)
+        |> read_full_looper(dst)
     end
   end
 
@@ -330,7 +330,7 @@ defmodule Absinthe.JPG do
   """
   @spec ignore(Decoder.t(), integer()) :: Decoder.t() | no_return
   def ignore(
-        %Decoder{bytes: %Decoder.Bytes{n_unreadable: n}, bits: %Decoder.Bits{n: n}} = decoder,
+        %Decoder{bytes: %Decoder.Bytes{n_unreadable: n_unreadable}, bits: %Decoder.Bits{n: n}} = decoder,
         n
       )
       when n_unreadable != 0 and n >= 8 do
@@ -374,7 +374,7 @@ defmodule Absinthe.JPG do
   process_sof
   """
   @spec process_sof(Decoder.t(), integer()) :: Decoder.t() | no_return
-  def process_sof(%{Decoder{n_comp: n}}, _) when n != 0, do: raise(ExceptionFormatError, message: "multiple SOF markers")
+  def process_sof(%Decoder{n_comp: n}, _) when n != 0, do: raise(ExceptionFormatError, message: "multiple SOF markers")
 
   def process_sof(%Decoder{tmp: tmp} = decoder, n) do
     sl = tmp |> Enum.slice(Range.new(0, n - 1))
@@ -385,22 +385,22 @@ defmodule Absinthe.JPG do
 
     unless decoder.tmp |> List.first == 8, do: raise(ExceptionUnsupportedError, message: "Precision: only 8-bit precision is supported")
 
-    decoder =
-      decoder
-    |> (fn n -> %Decoder{height: } end)
+    # decoder =
+    #   decoder
+    # |> (fn n -> %Decoder{height: } end)
   end
 
   defp determine_components(decoder, n) do
     n |>
       case do
-        6 + 3 * 1 ->
-          # Grayscale image
+        9 ->
+          # Grayscale image, 6 + 3 * 1
           %Decoder{decoder | n_comp: 1}
-        6 + 3 * 3 ->
-          # YCbCr or RGB image
+        15 ->
+          # YCbCr or RGB image, 6 + 3 * 3
           %Decoder{decoder | n_comp: 3}
-        6 + 3 * 4 ->
-          # YCbCrK or CMYK image
+        18 ->
+          # YCbCrK or CMYK image, 6 + 3 * 4
           %Decoder{decoder | n_comp: 4}
         _ ->
           raise(ExceptionUnsupportedError, message: "number of components")

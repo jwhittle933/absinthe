@@ -1,4 +1,4 @@
-defmodule Absinthe.JPG.Constants do
+defmodule Metallurgy.JPG.Constants do
   @moduledoc false
 
   @dc_table 0
@@ -9,8 +9,8 @@ defmodule Absinthe.JPG.Constants do
   @max_components 4
 
   @adobe_tranform_unknown 0
-  @adobe_tranform_YCbCr 1
-  @adobe_tranform_YCbCrk 2
+  @adobe_tranform_ycbcr 1
+  @adobe_tranform_ycbcrk 2
 
   @doc """
   Module constants representing portions of JPEG image.

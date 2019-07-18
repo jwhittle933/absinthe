@@ -1,5 +1,8 @@
-defmodule Absinthe.Files do
-  alias Absinthe.PNG
+defmodule Metallurgy.Files do
+  @moduledoc """
+  Metallurgy file parser module
+  """
+  alias Metallurgy.PNG
 
   @png_signature <<137::size(8), 80::size(8), 78::size(8), 71::size(8), 13::size(8), 10::size(8),
                    26::size(8), 10::size(8)>>
@@ -15,7 +18,7 @@ defmodule Absinthe.Files do
         # IO.inspect(info)
         # get_mime(file) |> IO.inspect()
         # open_and_read(file) |> write_to_new_file(file, opts)
-        open_and_read(file) |> IO.inspect()
+        file |> open_and_read |> IO.inspect()
         # show_binary(file)
       end)
     else
@@ -59,7 +62,7 @@ defmodule Absinthe.Files do
   end
 
   def show_binary(file) do
-    File.read!(file) |> PNG.decode() |> IO.inspect()
+    file |> File.read! |> PNG.decode() |> IO.inspect()
   end
 
   def open_and_read(file) do

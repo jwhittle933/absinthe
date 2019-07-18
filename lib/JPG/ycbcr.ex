@@ -1,4 +1,4 @@
-defmodule Absinthe.JPG.YCBCR do
+defmodule Metallurgy.JPG.YCBCR do
   @moduledoc """
   Chroma subsample ratio used in YCbCr image
 
@@ -32,6 +32,7 @@ defmodule Absinthe.JPG.YCBCR do
         }
 
   defmodule Rectangle do
+    @moduledoc false
     alias __MODULE__
     defstruct [:min, :max]
 
@@ -41,6 +42,7 @@ defmodule Absinthe.JPG.YCBCR do
           }
 
     defmodule Point do
+      @moduledoc false
       defstruct [:x, :y]
 
       @type t() :: %__MODULE__{

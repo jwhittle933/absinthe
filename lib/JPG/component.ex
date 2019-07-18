@@ -1,4 +1,4 @@
-defmodule Absinthe.JPG.Component do
+defmodule Metallurgy.JPG.Component do
   @moduledoc """
   Component specification
   """
