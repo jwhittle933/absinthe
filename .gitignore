@@ -23,3 +23,4 @@ erl_crash.dump
 pngconverter-*.tar
 
 **/.DS_store
+config/*.secret.exs

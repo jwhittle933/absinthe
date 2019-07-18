@@ -1,7 +1,7 @@
 defmodule Metallurgy.JPG do
   alias __MODULE__
   alias Metallurgy.JPG.Decoder
-  use Bitwise
+  use Bitwise, skip_operators: true
 
   @moduledoc """
   Reference: http://www.fileformat.info/format/jpeg/egff.htm
@@ -330,7 +330,8 @@ defmodule Metallurgy.JPG do
   """
   @spec ignore(Decoder.t(), integer()) :: Decoder.t() | no_return
   def ignore(
-        %Decoder{bytes: %Decoder.Bytes{n_unreadable: n_unreadable}, bits: %Decoder.Bits{n: n}} = decoder,
+        %Decoder{bytes: %Decoder.Bytes{n_unreadable: n_unreadable}, bits: %Decoder.Bits{n: n}} =
+          decoder,
         n
       )
       when n_unreadable != 0 and n >= 8 do
@@ -374,37 +375,58 @@ defmodule Metallurgy.JPG do
   process_sof
   """
   @spec process_sof(Decoder.t(), integer()) :: Decoder.t() | no_return
-  def process_sof(%Decoder{n_comp: n}, _) when n != 0, do: raise(ExceptionFormatError, message: "multiple SOF markers")
+  def process_sof(%Decoder{n_comp: n}, _) when n != 0,
+    do: raise(ExceptionFormatError, message: "multiple SOF markers")
 
   def process_sof(%Decoder{tmp: tmp} = decoder, n) do
     sl = tmp |> Enum.slice(Range.new(0, n - 1))
+
     decoder =
       decoder
       |> determine_components(n)
       |> read_full(sl)
 
-    unless decoder.tmp |> List.first == 8, do: raise(ExceptionUnsupportedError, message: "Precision: only 8-bit precision is supported")
+    unless decoder.tmp |> List.first() == 8,
+      do:
+        raise(ExceptionUnsupportedError, message: "Precision: only 8-bit precision is supported")
 
-    # decoder =
-    #   decoder
-    # |> (fn n -> %Decoder{height: } end)
+    # workaround, not Elixir way
+    n_height = decoder.tmp |> List.first() |> bsl(8)
+    n_height_add = decoder.tmp |> Enum.at(2)
+
+    n_width = decoder.tmp |> Enum.at(3) |> bsl(8)
+    n_width_add = decoder.tmp |> Enum.at(4)
+
+    decoder =
+      decoder
+      |> (fn d -> %Decoder{d | height: n_height + n_height_add} end).()
+      |> (fn d -> %Decoder{d | width: n_width + n_width_add} end).()
+
+    unless Enum.at(decoder.tmp, 5) == decoder.n_comp,
+      do: raise(ExceptionFormatError, message: "SOF has wrong length")
   end
 
   defp determine_components(decoder, n) do
-    n |>
-      case do
-        9 ->
-          # Grayscale image, 6 + 3 * 1
-          %Decoder{decoder | n_comp: 1}
-        15 ->
-          # YCbCr or RGB image, 6 + 3 * 3
-          %Decoder{decoder | n_comp: 3}
-        18 ->
-          # YCbCrK or CMYK image, 6 + 3 * 4
-          %Decoder{decoder | n_comp: 4}
-        _ ->
-          raise(ExceptionUnsupportedError, message: "number of components")
-      end
+    n
+    |> case do
+      9 ->
+        # Grayscale image, 6 + 3 * 1
+        %Decoder{decoder | n_comp: 1}
+
+      15 ->
+        # YCbCr or RGB image, 6 + 3 * 3
+        %Decoder{decoder | n_comp: 3}
+
+      18 ->
+        # YCbCrK or CMYK image, 6 + 3 * 4
+        %Decoder{decoder | n_comp: 4}
+
+      _ ->
+        raise(ExceptionUnsupportedError, message: "number of components")
+    end
+  end
+
+  defp process_sof_looper(decoder) do
   end
 
   @doc """
