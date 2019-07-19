@@ -1,6 +1,32 @@
 defmodule Metallurgy.JPG.Constants do
   @moduledoc false
 
+  Module.register_attribute(__MODULE__, :dc_table, accumulate: false)
+  Module.register_attribute(__MODULE__, :ac_table, accumulate: false)
+  Module.register_attribute(__MODULE__, :max_tc, accumulate: false)
+  Module.register_attribute(__MODULE__, :max_th, accumulate: false)
+  Module.register_attribute(__MODULE__, :max_tq, accumulate: false)
+  Module.register_attribute(__MODULE__, :max_components, accumulate: false)
+  Module.register_attribute(__MODULE__, :adobe_transform_unknown, accumulate: false)
+  Module.register_attribute(__MODULE__, :adobe_transform_ycbcr, accumulate: false)
+  Module.register_attribute(__MODULE__, :adobe_transform_ycbcrk, accumulate: false)
+  Module.register_attribute(__MODULE__, :sof0, accumulate: false)
+  Module.register_attribute(__MODULE__, :sof1, accumulate: false)
+  Module.register_attribute(__MODULE__, :sof2, accumulate: false)
+  Module.register_attribute(__MODULE__, :rst0, accumulate: false)
+  Module.register_attribute(__MODULE__, :rst7, accumulate: false)
+  Module.register_attribute(__MODULE__, :soi, accumulate: false)
+  Module.register_attribute(__MODULE__, :sos, accumulate: false)
+  Module.register_attribute(__MODULE__, :dqt, accumulate: false)
+  Module.register_attribute(__MODULE__, :dri, accumulate: false)
+  Module.register_attribute(__MODULE__, :com, accumulate: false)
+  Module.register_attribute(__MODULE__, :app0, accumulate: false)
+  Module.register_attribute(__MODULE__, :app14, accumulate: false)
+  Module.register_attribute(__MODULE__, :app15, accumulate: false)
+  Module.register_attribute(__MODULE__, :eoi, accumulate: false)
+  Module.register_attribute(__MODULE__, :pad, accumulate: false)
+  Module.register_attribute(__MODULE__, :unzig, accumulate: false)
+
   @dc_table 0
   @ac_table 1
   @max_tc 1

@@ -1,7 +1,8 @@
 defmodule Metallurgy.JPG do
   alias __MODULE__
   alias Metallurgy.JPG.Decoder
-  use Bitwise, skip_operators: true
+  alias Metallurgy.JPG.Constants
+  use Bitwise, only_operators: true
 
   @moduledoc """
   Reference: http://www.fileformat.info/format/jpeg/egff.htm
@@ -56,6 +57,13 @@ defmodule Metallurgy.JPG do
   defmodule ExceptionUnsupportedError do
     @moduledoc """
     Error raised number of components exceeds the normal amount
+    """
+    defexception [:message]
+  end
+
+  defmodule ExceptionRepeatedComponent do
+    @moduledoc """
+    Error raised when components are repeated in decoder.comp
     """
     defexception [:message]
   end
@@ -237,9 +245,9 @@ defmodule Metallurgy.JPG do
   @spec unread_byte_stuffed_byte(Decoder.t()) :: Decoder.t() | {:error, String.t()}
   def unread_byte_stuffed_byte(%Decoder{} = decoder) do
     with true <- decoder.bits.n >= 8 do
-      a_shift_right = bsr(decoder.bits.a, 8)
+      a_shift_right = Bitwise.bsr(decoder.bits.a, 8)
       new_n = decoder.bits.n - 8
-      m_shift_right = bsr(decoder.bits.m, 8)
+      m_shift_right = Bitwise.bsr(decoder.bits.m, 8)
 
       %Decoder{
         decoder
@@ -391,10 +399,10 @@ defmodule Metallurgy.JPG do
         raise(ExceptionUnsupportedError, message: "Precision: only 8-bit precision is supported")
 
     # workaround, not Elixir way
-    n_height = decoder.tmp |> List.first() |> bsl(8)
+    n_height = decoder.tmp |> List.first() |> Bitwise.bsl(8)
     n_height_add = decoder.tmp |> Enum.at(2)
 
-    n_width = decoder.tmp |> Enum.at(3) |> bsl(8)
+    n_width = decoder.tmp |> Enum.at(3) |> Bitwise.bsl(8)
     n_width_add = decoder.tmp |> Enum.at(4)
 
     decoder =
@@ -404,6 +412,51 @@ defmodule Metallurgy.JPG do
 
     unless Enum.at(decoder.tmp, 5) == decoder.n_comp,
       do: raise(ExceptionFormatError, message: "SOF has wrong length")
+  end
+
+  @spec process_sof_looper(Decoder.t(), integer()) :: Decoder.t() | no_return
+  defp process_sof_looper(%Decoder{n_comp: n} = decoder, i) when n >= i, do: decoder
+
+  defp process_sof_looper(%Decoder{comp: comp, tmp: tmp} = decoder, i) do
+    decoder =
+      %Decoder{decoder | comp: %{decoder.comp | c: tmp |> Enum.at(9)}}
+      |> check_comp_loop(i, 0)
+      |> (fn d ->
+            %Decoder{d | comp: d.comp |> List.replace_at(i, d.tmp |> Enum.at(8 + 3 * i))}
+          end).()
+
+    unless decoder.comp |> Enum.at(i) |> (fn x -> x.tq end).() <= Constants.max_tq(),
+      do: raise(ExceptionFormatError, message: "Bad tq value")
+  end
+
+  @spec check_luma_chroma(Decoder.t(), integer()) :: Decoder.t() | no_return
+  defp check_luma_chroma(%Decoder{tmp: tmp} = decoder, i) do
+    hv = tmp |> Enum.at(7 + 3 * i)
+    h = hv |> Bitwise.bsr(4)
+    v = hv |> (fn x -> x &&& 15 end).()
+
+    (fn
+       h, v when h < 1 or 4 > h or v < 1 or 4 < v ->
+         raise(ExceptionFormatError, message: "luma/chroma subsampling invalid")
+
+       h, v when h == 3 or v == 3 ->
+         raise(ExceptionFormatError, message: "unsupported subsampline ratio")
+    end).(h, v)
+
+    # ==============> Pause
+  end
+
+  @spec check_comp_loop(Decoder.t(), integer(), integer()) :: Decoder.t() | no_return
+  defp check_comp_loop(decoder, i, j) when i >= j, do: decoder
+
+  defp check_comp_loop(%Decoder{comp: comp} = decoder, i, j) do
+    compi_c = comp |> Enum.at(i) |> (fn x -> x.c end).()
+    compj_c = comp |> Enum.at(j) |> (fn x -> x.c end).()
+
+    unless compi_c != compj_c,
+      do: raise(ExceptionRepeatedComponent, message: "Repeated component identifier")
+
+    check_comp_loop(decoder, i, j + 1)
   end
 
   defp determine_components(decoder, n) do
@@ -426,13 +479,10 @@ defmodule Metallurgy.JPG do
     end
   end
 
-  defp process_sof_looper(decoder) do
-  end
-
   @doc """
   Reference: https://stackoverflow.com/questions/32642907/how-does-the-copy-function-work
 
-  copy copies elements from a source slice into a destination slice.
+  copy copies elements from a source list into a destination list.
   The source and destination may overlap. Copy returns the new list and the
   number of elements copied, which will be the minimum of length(src) and length(dst).
   """
