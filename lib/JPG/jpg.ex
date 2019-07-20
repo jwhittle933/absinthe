@@ -2,6 +2,7 @@ defmodule Metallurgy.JPG do
   alias __MODULE__
   alias Metallurgy.JPG.Decoder
   alias Metallurgy.JPG.Constants
+  alias Metallurgy.JPG.Component
   use Bitwise, only_operators: true
 
   @moduledoc """
@@ -412,6 +413,10 @@ defmodule Metallurgy.JPG do
 
     unless Enum.at(decoder.tmp, 5) == decoder.n_comp,
       do: raise(ExceptionFormatError, message: "SOF has wrong length")
+
+    decoder =
+      decoder
+      |> process_sof_looper(0)
   end
 
   @spec process_sof_looper(Decoder.t(), integer()) :: Decoder.t() | no_return
@@ -427,13 +432,17 @@ defmodule Metallurgy.JPG do
 
     unless decoder.comp |> Enum.at(i) |> (fn x -> x.tq end).() <= Constants.max_tq(),
       do: raise(ExceptionFormatError, message: "Bad tq value")
+
+    decoder =
+      decoder
+      |> check_luma_chroma(i)
   end
 
   @spec check_luma_chroma(Decoder.t(), integer()) :: Decoder.t() | no_return
-  defp check_luma_chroma(%Decoder{tmp: tmp} = decoder, i) do
+  defp check_luma_chroma(%Decoder{tmp: tmp, n_comp: n_comp} = decoder, i) do
     hv = tmp |> Enum.at(7 + 3 * i)
-    h = hv |> Bitwise.bsr(4)
-    v = hv |> (fn x -> x &&& 15 end).()
+    h = hv <<< 4
+    v = hv &&& 15
 
     (fn
        h, v when h < 1 or 4 > h or v < 1 or 4 < v ->
@@ -441,9 +450,81 @@ defmodule Metallurgy.JPG do
 
        h, v when h == 3 or v == 3 ->
          raise(ExceptionFormatError, message: "unsupported subsampline ratio")
-    end).(h, v)
+     end).(h, v)
 
-    # ==============> Pause
+    {h, v} =
+      n_comp
+      |> cond do
+        1 ->
+          {1, 1}
+
+        3 ->
+          with false <- comp |> List.first() |> (fn x -> rem(x.h, x.h) end).() == 0,
+               false <- comp |> List.first() |> (fn x -> rem(x.v, x.v) end).() == 0 do
+            raise(ExceptionUnsupportedError, message: "unsupported subsampling ratio")
+          end
+
+        # fix this ^^^
+
+        4 ->
+          :error
+      end
+
+    {decoder, h, v} = decoder |> check_h_v({h, v}, i)
+
+    decoder =
+      decoder
+      |> (fn d ->
+            %Decoder{
+              d
+              | comp:
+                  d.comp |> List.replace_at(i, %Component{(d.comp |> Enum.at(i)) | h: h, v: v})
+            }
+          end).()
+
+    # ===============> Pause
+  end
+
+  @doc """
+  If a jpeg has only one component, section A.2 says "this data is non-interleaved by definition" and
+  section A.2.2 says "[in this case...] the order of data units within a scan shall be lef-to-right
+  and top-to-bottom... regardless of the values of H_1 and V_1". Section 4.8.2 also says "[for non-interleaved
+  data], the MCU is defined to be one data unit." Similarly, section A.1.1 explains that it is the ratio
+  of H_i to max_j(H_j) that matters, and similarly for V. For grayscale images, H_1 is the maximum H_j
+  for all components j, so that the ratio is always 1. The component's (h, v) is effectively always (1, 1):
+  even if the nominal (h, v) is (2, 1), a 20x5 image is enclosed in three 8x8 MCU's, not two 16x8 MCU's
+
+  For YCbCr images, we only support 4:4:4, 4:4:0, 4:2:2, 4:2:0, 4:1:1, or 4:1:0 chroma subsampling ratios.
+  This implies that the (h, v) values for the Y component are either (1, 1), (1, 2), (2, 1), (2, 2), (4, 1),
+  or (4, 2), and the Y component's values must be a multiple of the Cb and Cr component's values. We also assume
+  that the two chroma components have the same subsampling ratio.
+  """
+  @spec check_h_v(Decoder.t(), {integer(), integer()}, integer()) ::
+          {integer(), integer()} | no_return
+  def check_h_v(decoder, {h, _}, _) when h == 1, do: {decoder, 1, 1}
+
+  def check_h_v(%Decoder{n_comp: n_comp} = decoder, {h, v}, i) when h == 3 do
+    (fn
+       _, i when i == 0 ->
+         unless v != 4,
+           do: raise(ExceptionUnsupportedError, message: "unsupported subsampling ratio")
+
+       comp, i when i == 1 ->
+         with false <- comp |> List.first() |> (fn x -> rem(x.h, x.h) end).() == 0,
+              false <- comp |> List.first() |> (fn x -> rem(x.v, x.v) end).() == 0 do
+           raise(ExceptionUnsupportedError, message: "unsupported subsampling ratio")
+         end
+
+       comp, i when i == 2 ->
+         with false <- comp |> Enum.at(1) |> (fn x -> x == h end).(),
+              false <- comp |> Enum.at(1) |> (fn x -> x == v end).() do
+           raise(ExceptionUnsupportedError, message: "unsupported subsampling ratio")
+         end
+     end).(n_comp, i)
+  end
+
+  def check_h_v(%Decoder{n_comp: n_comp} = decoder, {h, v}, i) when h == 4 do
+    #
   end
 
   @spec check_comp_loop(Decoder.t(), integer(), integer()) :: Decoder.t() | no_return
