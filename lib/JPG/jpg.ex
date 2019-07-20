@@ -452,9 +452,23 @@ defmodule Metallurgy.JPG do
          raise(ExceptionFormatError, message: "unsupported subsampline ratio")
      end).(h, v)
 
-    with true <- n_comp == 1 do
-      {h, v} = {1, 1}
-    end
+    {h, v} =
+      n_comp
+      |> cond do
+        1 ->
+          {1, 1}
+
+        3 ->
+          with false <- comp |> List.first() |> (fn x -> rem(x.h, x.h) end).() == 0,
+               false <- comp |> List.first() |> (fn x -> rem(x.v, x.v) end).() == 0 do
+            raise(ExceptionUnsupportedError, message: "unsupported subsampling ratio")
+          end
+
+        # fix this ^^^
+
+        4 ->
+          :error
+      end
 
     {decoder, h, v} = decoder |> check_h_v({h, v}, i)
 
@@ -467,6 +481,8 @@ defmodule Metallurgy.JPG do
                   d.comp |> List.replace_at(i, %Component{(d.comp |> Enum.at(i)) | h: h, v: v})
             }
           end).()
+
+    # ===============> Pause
   end
 
   @doc """
