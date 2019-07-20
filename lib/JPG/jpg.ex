@@ -414,15 +414,14 @@ defmodule Metallurgy.JPG do
     unless Enum.at(decoder.tmp, 5) == decoder.n_comp,
       do: raise(ExceptionFormatError, message: "SOF has wrong length")
 
-    decoder =
-      decoder
-      |> process_sof_looper(0)
+    decoder
+    |> process_sof_looper(0)
   end
 
   @spec process_sof_looper(Decoder.t(), integer()) :: Decoder.t() | no_return
-  defp process_sof_looper(%Decoder{n_comp: n} = decoder, i) when n >= i, do: decoder
+  defp process_sof_looper(%Decoder{n_comp: n_comp} = decoder, i) when n_comp >= i, do: decoder
 
-  defp process_sof_looper(%Decoder{comp: comp, tmp: tmp} = decoder, i) do
+  defp process_sof_looper(%Decoder{n_comp: n_comp, comp: comp, tmp: tmp} = decoder, i) do
     decoder =
       %Decoder{decoder | comp: %{decoder.comp | c: tmp |> Enum.at(9)}}
       |> check_comp_loop(i, 0)
@@ -433,56 +432,18 @@ defmodule Metallurgy.JPG do
     unless decoder.comp |> Enum.at(i) |> (fn x -> x.tq end).() <= Constants.max_tq(),
       do: raise(ExceptionFormatError, message: "Bad tq value")
 
-    decoder =
+    {h, v} =
       decoder
       |> check_luma_chroma(i)
-  end
+      |> check_h_v(i)
 
-  @spec check_luma_chroma(Decoder.t(), integer()) :: Decoder.t() | no_return
-  defp check_luma_chroma(%Decoder{tmp: tmp, n_comp: n_comp} = decoder, i) do
-    hv = tmp |> Enum.at(7 + 3 * i)
-    h = hv <<< 4
-    v = hv &&& 15
-
-    (fn
-       h, v when h < 1 or 4 > h or v < 1 or 4 < v ->
-         raise(ExceptionFormatError, message: "luma/chroma subsampling invalid")
-
-       h, v when h == 3 or v == 3 ->
-         raise(ExceptionFormatError, message: "unsupported subsampline ratio")
-     end).(h, v)
-
-    {h, v} =
-      n_comp
-      |> cond do
-        1 ->
-          {1, 1}
-
-        3 ->
-          with false <- comp |> List.first() |> (fn x -> rem(x.h, x.h) end).() == 0,
-               false <- comp |> List.first() |> (fn x -> rem(x.v, x.v) end).() == 0 do
-            raise(ExceptionUnsupportedError, message: "unsupported subsampling ratio")
-          end
-
-        # fix this ^^^
-
-        4 ->
-          :error
-      end
-
-    {decoder, h, v} = decoder |> check_h_v({h, v}, i)
-
-    decoder =
-      decoder
-      |> (fn d ->
-            %Decoder{
-              d
-              | comp:
-                  d.comp |> List.replace_at(i, %Component{(d.comp |> Enum.at(i)) | h: h, v: v})
-            }
-          end).()
-
-    # ===============> Pause
+    decoder
+    |> (fn d ->
+          %Decoder{
+            d
+            | comp: d.comp |> List.replace_at(i, %Component{(d.comp |> Enum.at(i)) | h: h, v: v})
+          }
+        end).()
   end
 
   @doc """
@@ -499,32 +460,67 @@ defmodule Metallurgy.JPG do
   or (4, 2), and the Y component's values must be a multiple of the Cb and Cr component's values. We also assume
   that the two chroma components have the same subsampling ratio.
   """
-  @spec check_h_v(Decoder.t(), {integer(), integer()}, integer()) ::
+  @spec check_h_v({Decoder.t(), integer(), integer(), integer()}, integer()) ::
           {integer(), integer()} | no_return
-  def check_h_v(decoder, {h, _}, _) when h == 1, do: {decoder, 1, 1}
+  def check_h_v({%Decoder{n_comp: n_comp}, _, _, _}, _) when n_comp == 1, do: {1, 1}
 
-  def check_h_v(%Decoder{n_comp: n_comp} = decoder, {h, v}, i) when h == 3 do
+  def check_h_v({%Decoder{n_comp: n_comp, comp: comp}, _, h, v}, i) when n_comp == 3 do
     (fn
-       _, i when i == 0 ->
+       i when i == 0 ->
          unless v != 4,
            do: raise(ExceptionUnsupportedError, message: "unsupported subsampling ratio")
 
-       comp, i when i == 1 ->
-         with false <- comp |> List.first() |> (fn x -> rem(x.h, x.h) end).() == 0,
-              false <- comp |> List.first() |> (fn x -> rem(x.v, x.v) end).() == 0 do
+       i when i == 1 ->
+         with true <-
+                comp |> List.first() |> (fn x -> rem(x.h, x.h) == 0 || rem(x.v, x.v) == 0 end).() do
            raise(ExceptionUnsupportedError, message: "unsupported subsampling ratio")
          end
 
-       comp, i when i == 2 ->
-         with false <- comp |> Enum.at(1) |> (fn x -> x == h end).(),
-              false <- comp |> Enum.at(1) |> (fn x -> x == v end).() do
-           raise(ExceptionUnsupportedError, message: "unsupported subsampling ratio")
+       i when i == 2 ->
+         with true <- comp |> Enum.at(1) |> (fn x -> x.h != h || x.v != v end).() do
+           raise(ExceptionUnsupportedError, messsage: "unsupported subsampling ratio")
          end
-     end).(n_comp, i)
+     end).(i)
+
+    {h, v}
   end
 
-  def check_h_v(%Decoder{n_comp: n_comp} = decoder, {h, v}, i) when h == 4 do
-    #
+  def check_h_v({%Decoder{n_comp: n_comp, comp: comp}, hv, h, v}, i) when n_comp === 4 do
+    (fn
+       i when i == 0 ->
+         with true <- hv != 0x11 && hv != 0x22 do
+           raise(ExceptionUnsupportedError, message: "unsupported subsampling ratio")
+         end
+
+       i when i == 1 or i == 2 ->
+         with true <- hv != 0x11 do
+           raise(ExceptionUnsupportedError, message: "unsupported subsampling ratio")
+         end
+
+       i when i == 3 ->
+         with true <- comp |> Enum.at(0) |> (fn x -> x.h != h || x.v != v end).() do
+           raise(ExceptionUnsupportedError, message: "unsupported subsampling ratio")
+         end
+     end).(i)
+
+    {h, v}
+  end
+
+  @spec check_luma_chroma(Decoder.t(), integer()) :: {integer(), integer(), integer()} | no_return
+  defp check_luma_chroma(%Decoder{tmp: tmp, n_comp: n_comp} = decoder, i) do
+    hv = tmp |> Enum.at(7 + 3 * i)
+    h = hv <<< 4
+    v = hv &&& 0x0F
+
+    (fn
+       h, v when h < 1 or 4 > h or v < 1 or 4 < v ->
+         raise(ExceptionFormatError, message: "luma/chroma subsampling invalid")
+
+       h, v when h == 3 or v == 3 ->
+         raise(ExceptionFormatError, message: "unsupported subsampline ratio")
+     end).(h, v)
+
+    {decoder, hv, h, v}
   end
 
   @spec check_comp_loop(Decoder.t(), integer(), integer()) :: Decoder.t() | no_return
