@@ -161,7 +161,7 @@ defmodule Metallurgy.JPG do
 
     new_bytes_list =
       decoder.bytes.buf
-      |> :binary.bin_to_list()
+      # |> :binary.bin_to_list()
       |> List.replace_at(val_index_0, new_val_0)
       |> List.replace_at(val_index_1, new_val_1)
       |> Enum.into(<<>>, fn byte -> <<byte::binary>> end)
@@ -171,7 +171,7 @@ defmodule Metallurgy.JPG do
       | bytes: %Decoder.Bytes{decoder.bytes | buf: new_bytes_list, i: 2, j: 2}
     }
 
-    fill(decoder)
+    decoder |> fill
   end
 
   def fill(decoder) do
@@ -189,18 +189,18 @@ defmodule Metallurgy.JPG do
   @spec read_byte_stuffed_byte(Decoder.t()) :: {:ok, iodata(), Decoder.t()} | no_return
   def read_byte_stuffed_byte(%Decoder{bytes: %Decoder.Bytes{i: i, j: j}} = decoder)
       when i + 2 <= j do
-    {:ok, x} = decoder.bytes.buf |> binary_part(i, 1)
+    {:ok, x} = decoder.bytes.buf |> Enum.slice(Range.new(i, i + 1))
 
     decoder = %Decoder{
       decoder
       | bytes: %Decoder.Bytes{decoder.bytes | i: decoder.bytes.i + 1, n_unreadable: 1}
     }
 
-    with true <- x != <<0xFF>> do
+    with true <- x != 0xFF do
       {:ok, x, decoder}
     else
       false ->
-        with false <- {:ok, <<0x00>>} = decoder.bytes.buf |> binary_part(decoder.bytes.i, 1) do
+        with false <- {:ok, 0x00} = decoder.bytes.buf |> binary_part(decoder.bytes.i, 1) do
           raise(ExceptionMissingFF00, message: "missing <<0xFF, 0x00>> byte sequence")
         else
           _ ->
@@ -209,7 +209,7 @@ defmodule Metallurgy.JPG do
               | bytes: %Decoder.Bytes{decoder.bytes | i: decoder.bytes.i + 1, n_unreadable: 2}
             }
 
-            {:ok, <<0xFF>>, decoder}
+            {:ok, 0xFF, decoder}
         end
     end
   end
@@ -222,17 +222,17 @@ defmodule Metallurgy.JPG do
 
     decoder = %Decoder{decoder | bytes: %Decoder.Bytes{n_unreadable: 1}}
 
-    with true <- x != <<0xFF>> do
+    with true <- x != 0xFF do
       {:ok, x, decoder}
     else
       _ ->
         {x, decoder} = decoder |> read_byte
         decoder = %Decoder{decoder | bytes: %Decoder.Bytes{n_unreadable: 2}}
 
-        unless x == <<0x00>>,
+        unless x == 0x00,
           do: raise(ExceptionMissingFF00, message: "missing <<0xFF, 0x00>> byte sequence")
 
-        {:ok, <<0xFF>>, decoder}
+        {:ok, 0xFF, decoder}
     end
   end
 
@@ -246,9 +246,9 @@ defmodule Metallurgy.JPG do
   @spec unread_byte_stuffed_byte(Decoder.t()) :: Decoder.t() | {:error, String.t()}
   def unread_byte_stuffed_byte(%Decoder{} = decoder) do
     with true <- decoder.bits.n >= 8 do
-      a_shift_right = Bitwise.bsr(decoder.bits.a, 8)
+      a_shift_right = decoder.bits.a >>> 8
       new_n = decoder.bits.n - 8
-      m_shift_right = Bitwise.bsr(decoder.bits.m, 8)
+      m_shift_right = decoder.bits.m >>> 8
 
       %Decoder{
         decoder
@@ -624,7 +624,7 @@ defmodule Metallurgy.JPG do
   defp dqt_check_x(_, _, _), do: raise(ExceptionFormatError, message: "bad Pq value")
 
   _ = """
-  d_quant_loop loops over decoder.quant, grabs tq, then i, and updates to decoder.tmp[2*i]<<8 | d.tmp[2*i+1]
+  d_quant_loop iterates over decoder.quant, grabs tq, then i, and updates to decoder.tmp[2*i]<<8 | d.tmp[2*i+1]
   """
 
   defp d_quant0_loop(%Decoder{tmp: tmp, quant: quant} = decoder, tq, i) when i < length(quant) do
