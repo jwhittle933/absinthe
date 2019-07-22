@@ -1,9 +1,9 @@
 defmodule Metallurgy.JPG do
   alias __MODULE__
   alias Metallurgy.JPG.Decoder
-  alias Metallurgy.JPG.Constants
   alias Metallurgy.JPG.Component
   use Bitwise, only_operators: true
+  use Metallurgy.JPG.Constants
 
   @moduledoc """
   Reference: http://www.fileformat.info/format/jpeg/egff.htm
@@ -459,6 +459,14 @@ defmodule Metallurgy.JPG do
   This implies that the (h, v) values for the Y component are either (1, 1), (1, 2), (2, 1), (2, 2), (4, 1),
   or (4, 2), and the Y component's values must be a multiple of the Cb and Cr component's values. We also assume
   that the two chroma components have the same subsampling ratio.
+
+  For 4-component images (either CMYK or YCbCrK), we only support two hv vectors: <<0x11, 0x11, 0x11, 0x11>>
+  and <<0x22, 0x11, 0x11, 0x22>>. Theoretically, 4-component jpeg images could mix and match hv values but
+  in practice, those two combinations are the only ones in use, and it simplifies the apply_black code below
+  if we can assume that:
+   - for CMYK, the C and K channels have full samples, and if the M and Y channels subsample, they subsample
+     both horizontally and vertically
+   - for YCbCrK, the Y and K channels have full samples
   """
   @spec check_h_v({Decoder.t(), integer(), integer(), integer()}, integer()) ::
           {integer(), integer()} | no_return
@@ -553,6 +561,95 @@ defmodule Metallurgy.JPG do
 
       _ ->
         raise(ExceptionUnsupportedError, message: "number of components")
+    end
+  end
+
+  @doc """
+  process_dqt
+  """
+  @spec process_dqt(Decoder.t(), integer()) :: Decoder.t() | no_return
+  def process_dqt(%Decoder{} = decoder, n) do
+    {decoder, n} =
+      decoder
+      |> process_dqt_loop(n)
+
+    unless n == 0, do: raise(ExceptionFormatError, message: "DQT has wrong length")
+
+    decoder
+  end
+
+  @spec process_dqt_loop(Decoder.t(), integer()) :: {Decoder.t(), integer()} | no_return
+  def process_dqt_loop(decoder, n) when n > 0 do
+    {x, decoder} = decoder |> read_byte
+    tq = x &&& 0x0F
+
+    unless tq <= @max_tq, do: raise(ExceptionFormatError, message: "bad tq value")
+
+    shift_x = x >>> 4
+    # read value from dqt_check_x: if {:stop, decoder}, return to caller and break iteration
+    decoder
+    |> dqt_check_x(shift_x, tq, n)
+    |> process_dqt_loop(n - 1)
+  end
+
+  _ = """
+  dqt_check_x checks on a bitshift right of x (x >>> 4), then performs actions on the decoder
+  data. In the two cases being checked (x == 0, x ==1), a loop break must be enabled that tells
+  process_dqt_loop to finish rather than re-iterating. Otherwise, continue iterating.
+  """
+
+  defp dqt_check_x(%Decoder{} = decoder, 0, _, n) when n < @block_size,
+    do: decoder
+
+  defp dqt_check_x(%Decoder{tmp: tmp} = decoder, 0, tq, n) do
+    n = n - Constants.block_size()
+
+    decoder
+    |> read_full(tmp |> Enum.slice(Range.new(0, @block_size)))
+    |> d_quant0_loop(tq, 0)
+  end
+
+  defp dqt_check_x(%Decoder{} = decoder, 1, _, n) when n < 2 * @block_size,
+    do: decoder
+
+  defp dqt_check_x(%Decoder{tmp: tmp} = decoder, 1, tq, n) do
+    n = n - 2 * Constants.block_size()
+
+    decoder
+    |> read_full(tmp |> Enum.slice(Range.new(0, @block_size)))
+    |> d_quant1_loop(tq, 0)
+  end
+
+  # Default
+  defp dqt_check_x(_, _, _), do: raise(ExceptionFormatError, message: "bad Pq value")
+
+  _ = """
+  d_quant_loop loops over decoder.quant, grabs tq, then i, and updates to decoder.tmp[2*i]<<8 | d.tmp[2*i+1]
+  """
+
+  defp d_quant0_loop(%Decoder{tmp: tmp, quant: quant} = decoder, tq, i) when i < length(quant) do
+    with true <- i <= Enum.count(quant |> Enum.at(tq)) do
+      new_tq_i = tmp |> Enum.at(i)
+      new_quant_tq = quant |> Enum.at(tq) |> List.replace_at(i, new_tq_i)
+
+      %Decoder{decoder | quant: decoder.quant |> List.replace_at(tq, new_quant_tq)}
+      |> d_quant0_loop
+    else
+      _ ->
+        decoder
+    end
+  end
+
+  defp d_quant1_loop(%Decoder{tmp: tmp, quant: quant} = decoder, tq, i) do
+    with true <- i <= Enum.count(quant |> Enum.at(tq)) do
+      new_tq_i = tmp |> Enum.at(2 * i) <<< 8 ||| tmp |> Enum.at(2 * i + 1)
+      new_quant_tq = quant |> Enum.at(tq) |> List.replace_at(i, new_tq_i)
+
+      %Decoder{decoder | quant: decoder.quant |> List.replace_at(tq, new_quant_tq)}
+      |> d_quant1_loop(tq, i + 1)
+    else
+      _ ->
+        decoder
     end
   end
 
