@@ -1,6 +1,7 @@
 defmodule Metallurgy.JPG.Constants do
   @moduledoc false
 
+  Module.register_attribute(__MODULE__, :block_size, accumulate: false)
   Module.register_attribute(__MODULE__, :dc_table, accumulate: false)
   Module.register_attribute(__MODULE__, :ac_table, accumulate: false)
   Module.register_attribute(__MODULE__, :max_tc, accumulate: false)
@@ -26,6 +27,8 @@ defmodule Metallurgy.JPG.Constants do
   Module.register_attribute(__MODULE__, :eoi, accumulate: false)
   Module.register_attribute(__MODULE__, :pad, accumulate: false)
   Module.register_attribute(__MODULE__, :unzig, accumulate: false)
+
+  @block_size 64
 
   @dc_table 0
   @ac_table 1
@@ -141,4 +144,39 @@ defmodule Metallurgy.JPG.Constants do
     62,
     63
   ]
+
+  defmacro __using__(_) do
+    quote do
+      @block_size Module.get_attribute(__MODULE__, :block_size)
+
+      @dc_table Module.get_attribute(__MODULE__, :dc_table)
+      @ac_table Module.get_attribute(__MODULE__, :ac_table)
+      @max_tc Module.get_attribute(__MODULE__, :max_tc)
+      @max_th Module.get_attribute(__MODULE__, :max_th)
+      @max_tq Module.get_attribute(__MODULE__, :max_tq)
+      @max_components Module.get_attribute(__MODULE__, :max_components)
+
+      @adobe_tranform_unknown Module.get_attribute(__MODULE__, :adobe_transform_unknown)
+      @adobe_tranform_ycbcr Module.get_attribute(__MODULE__, :adobe_transform_ycbcr)
+      @adobe_tranform_ycbcrk Module.get_attribute(__MODULE__, :adobe_transform_ycbcrk)
+
+      @sof0 Module.get_attribute(__MODULE__, :sof0)
+      @sof1 Module.get_attribute(__MODULE__, :sof1)
+      @sof2 Module.get_attribute(__MODULE__, :sof2)
+      @rst0 Module.get_attribute(__MODULE__, :rst0)
+      @rst7 Module.get_attribute(__MODULE__, :rst7)
+      @soi Module.get_attribute(__MODULE__, :soi)
+      @sos Module.get_attribute(__MODULE__, :sos)
+      @dqt Module.get_attribute(__MODULE__, :dqt)
+      @dri Module.get_attribute(__MODULE__, :dri)
+      @com Module.get_attribute(__MODULE__, :com)
+      @app0 Module.get_attribute(__MODULE__, :app0)
+      @app14 Module.get_attribute(__MODULE__, :app14)
+      @app15 Module.get_attribute(__MODULE__, :app15)
+      @eoi Module.get_attribute(__MODULE__, :eoi)
+      @pad Module.get_attribute(__MODULE__, :pad)
+
+      @unzig Module.get_attribute(__MODULE__, :unzig)
+    end
+  end
 end
