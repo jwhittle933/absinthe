@@ -2,6 +2,7 @@ defmodule Metallurgy.JPG do
   alias __MODULE__
   alias Metallurgy.JPG.Decoder
   alias Metallurgy.JPG.Component
+  alias Metallurgy.Builtin
   use Bitwise, only_operators: true
   use Metallurgy.JPG.Constants
 
@@ -320,7 +321,7 @@ defmodule Metallurgy.JPG do
   """
   defp read_full_looper(%Decoder{bytes: %Decoder.Bytes{i: i, j: j}} = decoder, dst) do
     src = decoder.bytes.buf |> Enum.slice(Range.new(i, j))
-    {dst, n} = copy(dst, src)
+    {dst, n} = Builtin.copy(dst, src)
     dst = dst |> Enum.slice(Range.new(n, Enum.count(dst) - 1))
     decoder = %Decoder{decoder | bytes: %Decoder.Bytes{decoder.bytes | i: decoder.bytes.i + n}}
 
@@ -633,7 +634,7 @@ defmodule Metallurgy.JPG do
       new_quant_tq = quant |> Enum.at(tq) |> List.replace_at(i, new_tq_i)
 
       %Decoder{decoder | quant: decoder.quant |> List.replace_at(tq, new_quant_tq)}
-      |> d_quant0_loop
+      |> d_quant0_loop(tq, i + 1)
     else
       _ ->
         decoder
@@ -651,6 +652,97 @@ defmodule Metallurgy.JPG do
       _ ->
         decoder
     end
+  end
+
+  def process_dri(_, n) when n != 2,
+    do: raise(ExceptionFormatError, message: "DRI has wrong length")
+
+  def process_dri(%Decoder{tmp: tmp} = decoder, n) do
+    decoder =
+      decoder
+      |> read_full(tmp |> Enum.slice(Range.new(0, 1)))
+
+    # rethink functionality; make more Elixir-y
+    new_ri = tmp |> List.first() |> (fn x -> x <<< 8 end).()
+    new_ri = tmp |> (fn tmp -> tmp |> Enum.at(1) end).() |> (fn x -> x + new_ri end).()
+
+    %Decoder{decoder | ri: new_ri}
+  end
+
+  def process_app0_marker(decoder, n) when n < 5, do: decoder |> ignore(n)
+
+  def process_app0_marker(%Decoder{tmp: tmp} = decoder, n) do
+    decoder =
+      decoder
+      |> read_full(tmp |> Enum.slice(Range.new(0, 4)))
+      |> (fn d -> %Decoder{d | jfif: tmp |> is_jfif?} end).()
+
+    with true <- n - 5 > 0 do
+      decoder |> ignore(n - 5)
+    else
+      _ ->
+        decoder
+    end
+  end
+
+  _ = """
+  check for JFIF binary pattern, <<74, 70, 73, 70>>
+
+  ## Example
+
+      iex> <<74, 70, 73, 70>>
+      "JFIF"
+  """
+
+  defp is_jfif?(tmp) do
+    tmp
+    |> (fn tmp -> tmp |> List.first() == <<74>> end).()
+    |> (fn prev, tmp -> prev && tmp |> Enum.at(1) == <<70>> end).(tmp)
+    |> (fn prev, tmp -> prev && tmp |> Enum.at(2) == <<73>> end).(tmp)
+    |> (fn prev, tmp -> prev && tmp |> Enum.at(3) == <<70>> end).(tmp)
+  end
+
+  def process_app14_marker(decoder, n) when n < 12, do: decoder |> ignore(n)
+
+  def process_app14_marker(%Decoder{tmp: tmp} = decoder, n) do
+    decoder =
+      decoder
+      |> read_full(tmp |> Enum.slice(Range.new(0, 11)))
+
+    with true <- is_valid_adobe_tranform?(tmp) do
+      decoder =
+        decoder
+        |> (fn d ->
+              %Decoder{decoder | adobe_transform_valid: true, adobe_transform: tmp |> Enum.at(11)}
+            end).()
+        |> (fn d when n - 12 > 0 -> d |> ignore(n) end).()
+    else
+      false ->
+        with true <- n - 12 > 0 do
+          decoder |> ignore(n - 12)
+        else
+          _ ->
+            decoder
+        end
+    end
+  end
+
+  _ = """
+  check for Adobe binary pattern, <<65, 100, 111, 98, 101>>>
+
+  ## Example
+
+      iex> <<65, 100, 111, 98, 101>>
+      "Adobe"
+  """
+
+  defp is_valid_adobe_tranform?(tmp) do
+    tmp
+    |> (fn tmp -> tmp |> List.first() == <<65>> end).()
+    |> (fn prev, tmp -> prev && tmp |> Enum.at(1) == <<100>> end).(tmp)
+    |> (fn prev, tmp -> prev && tmp |> Enum.at(2) == <<111>> end).(tmp)
+    |> (fn prev, tmp -> prev && tmp |> Enum.at(3) == <<98>> end).(tmp)
+    |> (fn prev, tmp -> prev && tmp |> Enum.at(4) == <<101>> end).(tmp)
   end
 
   @doc """
