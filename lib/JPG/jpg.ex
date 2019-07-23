@@ -2,6 +2,7 @@ defmodule Metallurgy.JPG do
   alias __MODULE__
   alias Metallurgy.JPG.Decoder
   alias Metallurgy.JPG.Component
+  alias Metallurgy.Builtin
   use Bitwise, only_operators: true
   use Metallurgy.JPG.Constants
 
@@ -9,6 +10,7 @@ defmodule Metallurgy.JPG do
   Reference: http://www.fileformat.info/format/jpeg/egff.htm
   Reference: https://www.sno.phy.queensu.ca/~phil/exiftool/TagNames/JPEG.html
   Reference: https://www.impulseadventure.com/photo/jpeg-huffman-coding.html
+  Reference: https://www.onlinehexeditor.com/#
 
   A port of the Golang image/jpeg package.
 
@@ -95,6 +97,8 @@ defmodule Metallurgy.JPG do
 
   """
   @type t() :: %__MODULE__{
+          soi: iodata(),
+          app0: iodata(),
           length: iodata(),
           identifier: iodata(),
           version: iodata(),
@@ -103,9 +107,11 @@ defmodule Metallurgy.JPG do
           ydensity: iodata(),
           xthumbnail: iodata(),
           ythumbnail: iodata(),
-          content: iodata()
+          stream: iodata()
         }
   defstruct [
+    :soi,
+    :app0,
     :length,
     :identifier,
     :version,
@@ -114,34 +120,8 @@ defmodule Metallurgy.JPG do
     :ydensity,
     :xthumbnail,
     :ythumbnail,
-    :content
+    :stream
   ]
-
-  def decode(
-        <<0xFF, 0xD8, 0xFF, 0xE0, length::binary-size(2), id::binary-size(5),
-          version::binary-size(2), units::binary-size(1), xdensity::binary-size(1),
-          ydensity::binary-size(1), xthumb::binary-size(3), ythumb::binary-size(3), rest::binary>>
-      ) do
-    IO.puts("Found JFIF data stream")
-
-    %JPG{
-      length: length,
-      identifier: id,
-      version: version,
-      units: units,
-      xdensity: xdensity,
-      ydensity: ydensity,
-      xthumbnail: xthumb,
-      ythumbnail: ythumb,
-      content: rest
-    }
-  end
-
-  def decode(<<_soi::binary-size(3), raw::binary>>) do
-    %JPG{
-      content: raw
-    }
-  end
 
   @doc """
   fill fills up the decoder.bytes.buf buffer from the underlying reader. It
@@ -161,7 +141,7 @@ defmodule Metallurgy.JPG do
 
     new_bytes_list =
       decoder.bytes.buf
-      |> :binary.bin_to_list()
+      # |> :binary.bin_to_list()
       |> List.replace_at(val_index_0, new_val_0)
       |> List.replace_at(val_index_1, new_val_1)
       |> Enum.into(<<>>, fn byte -> <<byte::binary>> end)
@@ -171,7 +151,7 @@ defmodule Metallurgy.JPG do
       | bytes: %Decoder.Bytes{decoder.bytes | buf: new_bytes_list, i: 2, j: 2}
     }
 
-    fill(decoder)
+    decoder |> fill
   end
 
   def fill(decoder) do
@@ -189,18 +169,18 @@ defmodule Metallurgy.JPG do
   @spec read_byte_stuffed_byte(Decoder.t()) :: {:ok, iodata(), Decoder.t()} | no_return
   def read_byte_stuffed_byte(%Decoder{bytes: %Decoder.Bytes{i: i, j: j}} = decoder)
       when i + 2 <= j do
-    {:ok, x} = decoder.bytes.buf |> binary_part(i, 1)
+    {:ok, x} = decoder.bytes.buf |> Enum.slice(Range.new(i, i + 1))
 
     decoder = %Decoder{
       decoder
       | bytes: %Decoder.Bytes{decoder.bytes | i: decoder.bytes.i + 1, n_unreadable: 1}
     }
 
-    with true <- x != <<0xFF>> do
+    with true <- x != 0xFF do
       {:ok, x, decoder}
     else
       false ->
-        with false <- {:ok, <<0x00>>} = decoder.bytes.buf |> binary_part(decoder.bytes.i, 1) do
+        with false <- {:ok, 0x00} = decoder.bytes.buf |> binary_part(decoder.bytes.i, 1) do
           raise(ExceptionMissingFF00, message: "missing <<0xFF, 0x00>> byte sequence")
         else
           _ ->
@@ -209,7 +189,7 @@ defmodule Metallurgy.JPG do
               | bytes: %Decoder.Bytes{decoder.bytes | i: decoder.bytes.i + 1, n_unreadable: 2}
             }
 
-            {:ok, <<0xFF>>, decoder}
+            {:ok, 0xFF, decoder}
         end
     end
   end
@@ -222,17 +202,17 @@ defmodule Metallurgy.JPG do
 
     decoder = %Decoder{decoder | bytes: %Decoder.Bytes{n_unreadable: 1}}
 
-    with true <- x != <<0xFF>> do
+    with true <- x != 0xFF do
       {:ok, x, decoder}
     else
       _ ->
         {x, decoder} = decoder |> read_byte
         decoder = %Decoder{decoder | bytes: %Decoder.Bytes{n_unreadable: 2}}
 
-        unless x == <<0x00>>,
+        unless x == 0x00,
           do: raise(ExceptionMissingFF00, message: "missing <<0xFF, 0x00>> byte sequence")
 
-        {:ok, <<0xFF>>, decoder}
+        {:ok, 0xFF, decoder}
     end
   end
 
@@ -246,9 +226,9 @@ defmodule Metallurgy.JPG do
   @spec unread_byte_stuffed_byte(Decoder.t()) :: Decoder.t() | {:error, String.t()}
   def unread_byte_stuffed_byte(%Decoder{} = decoder) do
     with true <- decoder.bits.n >= 8 do
-      a_shift_right = Bitwise.bsr(decoder.bits.a, 8)
+      a_shift_right = decoder.bits.a >>> 8
       new_n = decoder.bits.n - 8
-      m_shift_right = Bitwise.bsr(decoder.bits.m, 8)
+      m_shift_right = decoder.bits.m >>> 8
 
       %Decoder{
         decoder
@@ -320,7 +300,7 @@ defmodule Metallurgy.JPG do
   """
   defp read_full_looper(%Decoder{bytes: %Decoder.Bytes{i: i, j: j}} = decoder, dst) do
     src = decoder.bytes.buf |> Enum.slice(Range.new(i, j))
-    {dst, n} = copy(dst, src)
+    {dst, n} = Builtin.copy(dst, src)
     dst = dst |> Enum.slice(Range.new(n, Enum.count(dst) - 1))
     decoder = %Decoder{decoder | bytes: %Decoder.Bytes{decoder.bytes | i: decoder.bytes.i + n}}
 
@@ -624,7 +604,7 @@ defmodule Metallurgy.JPG do
   defp dqt_check_x(_, _, _), do: raise(ExceptionFormatError, message: "bad Pq value")
 
   _ = """
-  d_quant_loop loops over decoder.quant, grabs tq, then i, and updates to decoder.tmp[2*i]<<8 | d.tmp[2*i+1]
+  d_quant_loop iterates over decoder.quant, grabs tq, then i, and updates to decoder.tmp[2*i]<<8 | d.tmp[2*i+1]
   """
 
   defp d_quant0_loop(%Decoder{tmp: tmp, quant: quant} = decoder, tq, i) when i < length(quant) do
@@ -633,7 +613,7 @@ defmodule Metallurgy.JPG do
       new_quant_tq = quant |> Enum.at(tq) |> List.replace_at(i, new_tq_i)
 
       %Decoder{decoder | quant: decoder.quant |> List.replace_at(tq, new_quant_tq)}
-      |> d_quant0_loop
+      |> d_quant0_loop(tq, i + 1)
     else
       _ ->
         decoder
@@ -653,44 +633,145 @@ defmodule Metallurgy.JPG do
     end
   end
 
-  @doc """
-  Reference: https://stackoverflow.com/questions/32642907/how-does-the-copy-function-work
+  def process_dri(_, n) when n != 2,
+    do: raise(ExceptionFormatError, message: "DRI has wrong length")
 
-  copy copies elements from a source list into a destination list.
-  The source and destination may overlap. Copy returns the new list and the
-  number of elements copied, which will be the minimum of length(src) and length(dst).
-  """
-  @spec copy(list(integer()), list(integer())) ::
-          {list(integer() | none()), integer()} | {:atom, integer()}
-  def copy([], _src), do: {:error, 0}
-  def copy(dst, []), do: {dst, 0}
+  def process_dri(%Decoder{tmp: tmp} = decoder, n) do
+    decoder =
+      decoder
+      |> read_full(tmp |> Enum.slice(Range.new(0, 1)))
 
-  def copy(dst, src) do
-    # subtract 1 from each value for index use
-    dst_l = Enum.count(dst) - 1
-    src_l = Enum.count(src) - 1
+    # rethink functionality; make more Elixir-y
+    new_ri = tmp |> List.first() |> (fn x -> x <<< 8 end).()
+    new_ri = tmp |> (fn tmp -> tmp |> Enum.at(1) end).() |> (fn x -> x + new_ri end).()
 
-    case dst_l >= src_l do
-      true ->
-        case dst_l > src_l do
-          true ->
-            {smaller_src_to_dst({src, src_l}, {dst, dst_l}), src_l + 1}
+    %Decoder{decoder | ri: new_ri}
+  end
 
-          false ->
-            {src, src_l}
-        end
+  def process_app0_marker(decoder, n) when n < 5, do: decoder |> ignore(n)
 
-      false ->
-        {larger_src_to_dst({src, src_l}, {dst, dst_l}), dst_l + 1}
+  def process_app0_marker(%Decoder{tmp: tmp} = decoder, n) do
+    decoder =
+      decoder
+      |> read_full(tmp |> Enum.slice(Range.new(0, 4)))
+      |> (fn d -> %Decoder{d | jfif: tmp |> is_jfif?} end).()
+
+    with true <- n - 5 > 0 do
+      decoder |> ignore(n - 5)
+    else
+      _ ->
+        decoder
     end
   end
 
-  defp smaller_src_to_dst({src, src_l}, {dst, dst_l}) do
-    dst_tail = dst |> Enum.slice(Range.new(src_l, dst_l))
-    src ++ dst_tail
+  _ = """
+  check for JFIF binary pattern, <<74, 70, 73, 70>>
+
+  ## Example
+
+      iex> <<74, 70, 73, 70>>
+      "JFIF"
+  """
+
+  defp is_jfif?(tmp) do
+    tmp
+    |> (fn tmp -> tmp |> List.first() == <<74>> end).()
+    |> (fn prev, tmp -> prev && tmp |> Enum.at(1) == <<70>> end).(tmp)
+    |> (fn prev, tmp -> prev && tmp |> Enum.at(2) == <<73>> end).(tmp)
+    |> (fn prev, tmp -> prev && tmp |> Enum.at(3) == <<70>> end).(tmp)
   end
 
-  defp larger_src_to_dst({src, src_l}, {dst, dst_l}) do
-    src |> Enum.slice(Range.new(0, dst_l))
+  def process_app14_marker(decoder, n) when n < 12, do: decoder |> ignore(n)
+
+  def process_app14_marker(%Decoder{tmp: tmp} = decoder, n) do
+    decoder =
+      decoder
+      |> read_full(tmp |> Enum.slice(Range.new(0, 11)))
+
+    with true <- is_valid_adobe_tranform?(tmp) do
+      decoder =
+        decoder
+        |> (fn d ->
+              %Decoder{decoder | adobe_transform_valid: true, adobe_transform: tmp |> Enum.at(11)}
+            end).()
+        |> (fn d when n - 12 > 0 -> d |> ignore(n) end).()
+    else
+      false ->
+        with true <- n - 12 > 0 do
+          decoder |> ignore(n - 12)
+        else
+          _ ->
+            decoder
+        end
+    end
   end
+
+  _ = """
+  check for Adobe binary pattern, <<65, 100, 111, 98, 101>>>
+
+  ## Example
+
+      iex> <<65, 100, 111, 98, 101>>
+      "Adobe"
+  """
+
+  defp is_valid_adobe_tranform?(tmp) do
+    tmp
+    |> (fn tmp -> tmp |> List.first() == <<65>> end).()
+    |> (fn prev, tmp -> prev && tmp |> Enum.at(1) == <<100>> end).(tmp)
+    |> (fn prev, tmp -> prev && tmp |> Enum.at(2) == <<111>> end).(tmp)
+    |> (fn prev, tmp -> prev && tmp |> Enum.at(3) == <<98>> end).(tmp)
+    |> (fn prev, tmp -> prev && tmp |> Enum.at(4) == <<101>> end).(tmp)
+  end
+
+  @doc """
+  decode method that matches on JFIF data.
+  """
+  @spec decode(iodata()) :: Decoder.t()
+  def decode(<<0xFF, 0xD8, 0xFF, 0xE0, length::size(16), "JFIF", stream::binary>>) do
+    IO.puts("Found JFIF data stream")
+
+    %JPG{
+      length: length,
+      stream: stream
+    }
+  end
+
+  @doc """
+  decode method for adobe jpegs
+  """
+  def decode(<<0xFF, 0xD8, 0xFF, 0xE0, length::size(16), "Adobe", stream::binary>> = jpg) do
+    IO.puts("Found Adobe data stream")
+  end
+
+  @doc """
+  decode method for jpeg downloaded from Facebook
+  """
+  def decode(
+        <<0xFF, 0xD8, 0xFF, 0xE2, 0x1C, "ICC_PROFILE", _::binary-size(7), "lcms",
+          _::binary-size(4), "mntrRGB XYZ ", _::binary-size(10), ").acspAPPL", _::binary-size(35),
+          "-lcms", _::binary-size(48), "desc", _::binary-size(7), "^cprt", _::binary-size(8),
+          "wtpt", stream::binary>> = jpg
+      ) do
+    IO.puts("Found jpeg downloaded from Facebook data stream")
+
+    %JPG{
+      stream: stream
+    }
+  end
+
+  @doc """
+  decode method for matching raw jpeg stream
+  """
+  def decode(<<soi::binary-size(3), raw::binary>> = jpg) do
+    %JPG{
+      soi: soi,
+      stream: raw
+    }
+  end
+
+  @doc """
+  fallback decode for mislabeled files
+  """
+  def decode(_), do: raise(ExceptionFormatError, message: "Unknown file format. Not a jpeg.")
 end

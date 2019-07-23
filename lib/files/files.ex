@@ -38,8 +38,16 @@ defmodule Metallurgy.Files do
   pattern
   """
   def get_file_list([{:path, path}, {:ext, ext}, {:out, _}]) do
-    # [path: path, ext: ext, out: out] = opts
-    Path.wildcard("#{path}*#{ext}")
+    str_l = String.length(path)
+    with true <- path |> String.slice(Range.new(str_l - 1, str_l)) == "/" do
+      IO.puts "#{path}*#{ext}"
+      Path.wildcard("#{path}*#{ext}")
+    else
+      _ ->
+        path = path <> "/"
+        IO.puts "#{path}*#{ext}"
+        Path.wildcard("#{path}*#{ext}")
+    end
   end
 
   @doc """
