@@ -10,6 +10,7 @@ defmodule Metallurgy.JPG do
   Reference: http://www.fileformat.info/format/jpeg/egff.htm
   Reference: https://www.sno.phy.queensu.ca/~phil/exiftool/TagNames/JPEG.html
   Reference: https://www.impulseadventure.com/photo/jpeg-huffman-coding.html
+  Reference: https://www.onlinehexeditor.com/#
 
   A port of the Golang image/jpeg package.
 
@@ -96,6 +97,8 @@ defmodule Metallurgy.JPG do
 
   """
   @type t() :: %__MODULE__{
+          soi: iodata(),
+          app0: iodata(),
           length: iodata(),
           identifier: iodata(),
           version: iodata(),
@@ -104,9 +107,11 @@ defmodule Metallurgy.JPG do
           ydensity: iodata(),
           xthumbnail: iodata(),
           ythumbnail: iodata(),
-          content: iodata()
+          stream: iodata()
         }
   defstruct [
+    :soi,
+    :app0,
     :length,
     :identifier,
     :version,
@@ -115,34 +120,8 @@ defmodule Metallurgy.JPG do
     :ydensity,
     :xthumbnail,
     :ythumbnail,
-    :content
+    :stream
   ]
-
-  def decode(
-        <<0xFF, 0xD8, 0xFF, 0xE0, length::binary-size(2), id::binary-size(5),
-          version::binary-size(2), units::binary-size(1), xdensity::binary-size(1),
-          ydensity::binary-size(1), xthumb::binary-size(3), ythumb::binary-size(3), rest::binary>>
-      ) do
-    IO.puts("Found JFIF data stream")
-
-    %JPG{
-      length: length,
-      identifier: id,
-      version: version,
-      units: units,
-      xdensity: xdensity,
-      ydensity: ydensity,
-      xthumbnail: xthumb,
-      ythumbnail: ythumb,
-      content: rest
-    }
-  end
-
-  def decode(<<_soi::binary-size(3), raw::binary>>) do
-    %JPG{
-      content: raw
-    }
-  end
 
   @doc """
   fill fills up the decoder.bytes.buf buffer from the underlying reader. It
@@ -746,43 +725,53 @@ defmodule Metallurgy.JPG do
   end
 
   @doc """
-  Reference: https://stackoverflow.com/questions/32642907/how-does-the-copy-function-work
-
-  copy copies elements from a source list into a destination list.
-  The source and destination may overlap. Copy returns the new list and the
-  number of elements copied, which will be the minimum of length(src) and length(dst).
+  decode method that matches on JFIF data.
   """
-  @spec copy(list(integer()), list(integer())) ::
-          {list(integer() | none()), integer()} | {:atom, integer()}
-  def copy([], _src), do: {:error, 0}
-  def copy(dst, []), do: {dst, 0}
+  @spec decode(iodata()) :: Decoder.t()
+  def decode(<<0xFF, 0xD8, 0xFF, 0xE0, length::size(16), "JFIF", stream::binary>>) do
+    IO.puts("Found JFIF data stream")
 
-  def copy(dst, src) do
-    # subtract 1 from each value for index use
-    dst_l = Enum.count(dst) - 1
-    src_l = Enum.count(src) - 1
-
-    case dst_l >= src_l do
-      true ->
-        case dst_l > src_l do
-          true ->
-            {smaller_src_to_dst({src, src_l}, {dst, dst_l}), src_l + 1}
-
-          false ->
-            {src, src_l}
-        end
-
-      false ->
-        {larger_src_to_dst({src, src_l}, {dst, dst_l}), dst_l + 1}
-    end
+    %JPG{
+      length: length,
+      stream: stream
+    }
   end
 
-  defp smaller_src_to_dst({src, src_l}, {dst, dst_l}) do
-    dst_tail = dst |> Enum.slice(Range.new(src_l, dst_l))
-    src ++ dst_tail
+  @doc """
+  decode method for adobe jpegs
+  """
+  def decode(<<0xFF, 0xD8, 0xFF, 0xE0, length::size(16), "Adobe", stream::binary>> = jpg) do
+    IO.puts("Found Adobe data stream")
   end
 
-  defp larger_src_to_dst({src, src_l}, {dst, dst_l}) do
-    src |> Enum.slice(Range.new(0, dst_l))
+  @doc """
+  decode method for jpeg downloaded from Facebook
+  """
+  def decode(
+        <<0xFF, 0xD8, 0xFF, 0xE2, 0x1C, "ICC_PROFILE", _::binary-size(7), "lcms",
+          _::binary-size(4), "mntrRGB XYZ ", _::binary-size(10), ").acspAPPL", _::binary-size(35),
+          "-lcms", _::binary-size(48), "desc", _::binary-size(7), "^cprt", _::binary-size(8),
+          "wtpt", stream::binary>> = jpg
+      ) do
+    IO.puts("Found jpeg downloaded from Facebook data stream")
+
+    %JPG{
+      stream: stream
+    }
   end
+
+  @doc """
+  decode method for matching raw jpeg stream
+  """
+  def decode(<<soi::binary-size(3), raw::binary>> = jpg) do
+    %JPG{
+      soi: soi,
+      stream: raw
+    }
+  end
+
+  @doc """
+  fallback decode for mislabeled files
+  """
+  def decode(_), do: raise(ExceptionFormatError, message: "Unknown file format. Not a jpeg.")
 end
