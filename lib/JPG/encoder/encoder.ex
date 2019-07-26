@@ -2,9 +2,9 @@ defmodule Metallurgy.JPG.Encoder do
   @moduledoc """
   JPEG Encoder
   """
+  alias Metallurgy.PNG
 
-  defstruct [:w, :buf, :bits, :n_bits, :quant]
-
-  def encode() do
+  def encode(%PNG{} = png) do
+    png
   end
 end

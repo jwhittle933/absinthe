@@ -13,14 +13,7 @@ defmodule Metallurgy.Files do
   """
   def parse_files(files, opts) do
     with true <- Enum.count(files) > 0 do
-      Enum.each(files, fn file ->
-        # {:ok, info} = File.stat(file)
-        # IO.inspect(info)
-        # get_mime(file) |> IO.inspect()
-        # open_and_read(file) |> write_to_new_file(file, opts)
-        file |> open_and_read |> IO.inspect()
-        # show_binary(file)
-      end)
+      Enum.each(files, &show_binary/1)
     else
       false -> IO.puts("No files")
     end
@@ -39,13 +32,13 @@ defmodule Metallurgy.Files do
   """
   def get_file_list([{:path, path}, {:ext, ext}, {:out, _}]) do
     str_l = String.length(path)
+
     with true <- path |> String.slice(Range.new(str_l - 1, str_l)) == "/" do
-      IO.puts "#{path}*#{ext}"
+      IO.puts("#{path}*#{ext}")
       Path.wildcard("#{path}*#{ext}")
     else
       _ ->
         path = path <> "/"
-        IO.puts "#{path}*#{ext}"
         Path.wildcard("#{path}*#{ext}")
     end
   end
@@ -60,6 +53,16 @@ defmodule Metallurgy.Files do
   end
 
   @doc """
+  Returns the file name from a string path
+  """
+  @spec file_name(String.t()) :: String.t()
+  def file_name(path) when is_binary(path) do
+    path |> String.split("/") |> Enum.reverse() |> List.first()
+  end
+
+  def file_name(_), do: {:error, "Path is not a string"}
+
+  @doc """
   valid_mime?
 
   Compares provided file at path with a group
@@ -70,11 +73,11 @@ defmodule Metallurgy.Files do
   end
 
   def show_binary(file) do
-    file |> File.read!() |> PNG.decode() |> IO.inspect()
+    file |> File.read!() |> PNG.decode(file) |> IO.inspect()
   end
 
   def open_and_read(file) do
-    r_file = File.open!(file)
+    r_file = file |> Path.absname() |> File.open!()
     io_data = r_file |> IO.binread(:line)
 
     with :ok <- File.close(r_file) do
@@ -82,7 +85,7 @@ defmodule Metallurgy.Files do
     end
   end
 
-  def write_to_new_file(io_data, file, [{:path, _}, {:ext, ext}, {:out, out}]) do
+  def write_to_new_file(io_data, file, [{:path, _}, {:ext, ext}, {:out, out}] = opts) do
     with true <- File.dir?(out) do
       new_out = [out, Path.basename(file, ext)] |> Path.join()
       IO.puts(new_out <> ".jpg")
@@ -90,6 +93,7 @@ defmodule Metallurgy.Files do
     else
       false ->
         File.mkdir(out)
+        write_to_new_file(io_data, file, opts)
     end
   end
 end
